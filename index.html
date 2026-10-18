@@ -149,6 +149,18 @@ button:disabled {
   overflow: hidden;
 }
 
+/* BOLD DOLLAR SIGN ABOVE BARCODE */
+
+.tag-dollar {
+  position: absolute;
+  left: 8px;
+  top: .65in;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+  color: black;
+}
+
 /* BOTTOM ROW */
 
 .tag-footer {
@@ -446,8 +458,14 @@ function makeTag(data) {
     flags.appendChild(organic);
   }
 
+  /* HANDWRITTEN PRICE SPACE */
+
+  const dollar = document.createElement("div");
+  dollar.className = "tag-dollar";
+  dollar.textContent = "$";
+
   footer.append(barcodeBox, flags);
-  tag.append(header, name, footer);
+  tag.append(header, name, dollar, footer);
 
   if (data.upc && window.JsBarcode) {
     try {
