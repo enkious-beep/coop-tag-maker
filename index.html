@@ -149,12 +149,14 @@ button:disabled {
   overflow: hidden;
 }
 
+/* BOTTOM ROW */
+
 .tag-footer {
   position: absolute;
-  left: 4px;
+  left: 2px;
   right: 5px;
   bottom: 3px;
-  height: .42in;
+  height: .39in;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
@@ -162,8 +164,8 @@ button:disabled {
 }
 
 .tag-barcode {
-  width: 2.12in;
-  height: .39in;
+  width: 1.55in;
+  height: .29in;
   flex-shrink: 0;
   display: flex;
   align-items: flex-end;
@@ -171,9 +173,9 @@ button:disabled {
 }
 
 .tag-barcode svg {
+  display: block;
   width: 100%;
   height: 100%;
-  display: block;
 }
 
 .tag-flags {
@@ -182,9 +184,17 @@ button:disabled {
   align-items: center;
   justify-content: flex-end;
   gap: 2px;
-  flex: 1;
-  min-width: 0;
-  padding-bottom: 3px;
+  margin-left: auto;
+  padding-bottom: 1px;
+}
+
+.tag-snap {
+  display: block;
+  max-width: .83in;
+  max-height: .26in;
+  width: auto;
+  height: auto;
+  object-fit: contain;
 }
 
 .tag-organic {
@@ -194,15 +204,6 @@ button:disabled {
   white-space: nowrap;
 }
 
-.tag-snap {
-  display: block;
-  max-width: .83in;
-  max-height: .30in;
-  width: auto;
-  height: auto;
-  object-fit: contain;
-}
-
 #preview {
   margin: 15px 0;
 }
@@ -210,6 +211,8 @@ button:disabled {
 #sheet {
   display: none;
 }
+
+/* PRINTING */
 
 @page {
   size: letter;
@@ -271,6 +274,7 @@ button:disabled {
   <h2>1. Scan Product</h2>
 
   <button id="scanBtn">Scan Barcode</button>
+
   <button class="secondary" id="stopBtn" style="display:none">
     Stop Camera
   </button>
@@ -278,11 +282,15 @@ button:disabled {
   <div id="reader" style="display:none"></div>
 
   <label for="upc">Barcode / UPC</label>
-  <input id="upc" type="text" inputmode="numeric"
-         placeholder="Scan or enter barcode">
+  <input
+    id="upc"
+    type="text"
+    inputmode="numeric"
+    placeholder="Scan or enter barcode"
+  >
 
   <button id="lookupBtn">Find Product</button>
-  <p id="status"></p>
+  <p id="status" aria-live="polite"></p>
 </section>
 
 <section class="panel">
@@ -296,21 +304,29 @@ button:disabled {
 
   <div class="question">
     <strong>Is this Organic?</strong>
+
     <label>
-      <input type="radio" name="organic" value="yes"> Yes
+      <input type="radio" name="organic" value="yes">
+      Yes
     </label>
+
     <label>
-      <input type="radio" name="organic" value="no"> No
+      <input type="radio" name="organic" value="no">
+      No
     </label>
   </div>
 
   <div class="question">
     <strong>Is this SNAP eligible?</strong>
+
     <label>
-      <input type="radio" name="snap" value="yes"> Yes
+      <input type="radio" name="snap" value="yes">
+      Yes
     </label>
+
     <label>
-      <input type="radio" name="snap" value="no"> No
+      <input type="radio" name="snap" value="no">
+      No
     </label>
   </div>
 
@@ -320,6 +336,7 @@ button:disabled {
   </p>
 
   <h2>Tag Preview</h2>
+
   <div id="preview" class="tag"></div>
 
   <button id="addBtn">Add Tag to Sheet</button>
@@ -340,9 +357,8 @@ button:disabled {
   <button class="secondary" id="clearBtn">Clear Sheet</button>
 
   <p class="note">
-    Use your phone's print menu to save a PDF or choose
-    a compatible printer. Employee accounts and shared
-    storage will be added in a later version.
+    Use your phone's print menu to save a PDF or
+    choose a compatible printer.
   </p>
 </section>
 
@@ -381,6 +397,8 @@ function getProduct() {
   };
 }
 
+/* CREATE TAG */
+
 function makeTag(data) {
   const tag = document.createElement("div");
   tag.className = "tag";
@@ -400,7 +418,8 @@ function makeTag(data) {
   barcodeBox.className = "tag-barcode";
 
   const barcode = document.createElementNS(
-    "http://www.w3.org/2000/svg", "svg"
+    "http://www.w3.org/2000/svg",
+    "svg"
   );
 
   barcodeBox.appendChild(barcode);
@@ -408,12 +427,7 @@ function makeTag(data) {
   const flags = document.createElement("div");
   flags.className = "tag-flags";
 
-  if (data.organic) {
-    const organic = document.createElement("div");
-    organic.className = "tag-organic";
-    organic.textContent = "ORGANIC";
-    flags.appendChild(organic);
-  }
+  /* SNAP FIRST */
 
   if (data.snap) {
     const snap = document.createElement("img");
@@ -421,6 +435,15 @@ function makeTag(data) {
     snap.src = "snap-logo-Color.jpg";
     snap.alt = "SNAP";
     flags.appendChild(snap);
+  }
+
+  /* ORGANIC BELOW SNAP */
+
+  if (data.organic) {
+    const organic = document.createElement("div");
+    organic.className = "tag-organic";
+    organic.textContent = "ORGANIC";
+    flags.appendChild(organic);
   }
 
   footer.append(barcodeBox, flags);
@@ -431,19 +454,22 @@ function makeTag(data) {
       JsBarcode(barcode, data.upc, {
         format: "CODE128",
         displayValue: false,
-        margin: 6,
-        width: 1.6,
-        height: 36
+        margin: 8,
+        width: 1.4,
+        height: 32
       });
     } catch (e) {
       console.warn(
-        "Barcode could not be generated", e
+        "Barcode could not be generated",
+        e
       );
     }
   }
 
   return tag;
 }
+
+/* PREVIEW */
 
 function updatePreview() {
   $("preview").replaceWith(
@@ -464,6 +490,8 @@ document.querySelectorAll(
   r.addEventListener("change", updatePreview);
 });
 
+/* PRODUCT LOOKUP */
+
 async function lookup() {
   const upc = $("upc").value.trim();
 
@@ -476,7 +504,10 @@ async function lookup() {
   resetQuestions();
   $("brand").value = "";
   $("product").value = "";
-  $("status").textContent = "Looking up product...";
+
+  $("status").textContent =
+    "Looking up product...";
+
   updatePreview();
 
   try {
@@ -497,7 +528,9 @@ async function lookup() {
       const item = data.product;
 
       const brand = String(
-        item.brands || item.brand_owner || ""
+        item.brands ||
+        item.brand_owner ||
+        ""
       ).split(",")[0].trim();
 
       const productName = String(
@@ -535,6 +568,8 @@ async function lookup() {
 
 $("lookupBtn").onclick = lookup;
 
+/* ADD TO PRINT QUEUE */
+
 $("addBtn").onclick = () => {
   const data = getProduct();
 
@@ -558,6 +593,8 @@ $("addBtn").onclick = () => {
   $("status").textContent =
     "Tag added to sheet!";
 };
+
+/* PRINT SHEETS */
 
 function renderSheet() {
   const sheet = $("sheet");
@@ -592,6 +629,8 @@ $("printBtn").onclick = () => {
 
   window.print();
 };
+
+/* CAMERA SCANNER */
 
 async function stopScanner() {
   if (scanner) {
@@ -631,7 +670,13 @@ $("scanBtn").onclick = async () => {
 
     await scanner.start(
       {facingMode: "environment"},
-      {fps: 10, qrbox: {width: 250, height: 120}},
+      {
+        fps: 10,
+        qrbox: {
+          width: 250,
+          height: 120
+        }
+      },
       async decodedText => {
         if (!scanning) return;
 
@@ -646,6 +691,7 @@ $("scanBtn").onclick = async () => {
   } catch (error) {
     $("status").textContent =
       "Camera unavailable. Check camera permissions.";
+
     await stopScanner();
   }
 };
