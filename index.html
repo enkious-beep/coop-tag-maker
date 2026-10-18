@@ -350,7 +350,66 @@ button:disabled {
          placeholder="Password">
 
   <button id="loginBtn">Sign In</button>
+  <button id="forgotPasswordBtn" class="secondary">
+  Forgot Password?
+</button>
   <p id="loginStatus" class="message" aria-live="polite"></p>
+</section>
+
+  
+<section id="passwordSetupPanel" class="panel" style="display:none">
+  <h2 id="passwordSetupTitle">Create Your Password</h2>
+  <p id="passwordSetupDescription" class="note">
+    Welcome to The Local Co-op! Set your password below.
+  </p>
+
+  <label for="newPassword">New Password</label>
+  <input
+    id="newPassword"
+    type="password"
+    autocomplete="new-password"
+    placeholder="At least 8 characters"
+  >
+
+  <label for="confirmPassword">Confirm Password</label>
+  <input
+    id="confirmPassword"
+    type="password"
+    autocomplete="new-password"
+    placeholder="Enter password again"
+  >
+
+  <button id="setPasswordBtn">Save Password</button>
+
+  <p id="passwordSetupStatus"
+     class="message"
+     aria-live="polite"></p>
+</section>
+
+<section id="forgotPasswordPanel" class="panel" style="display:none">
+  <h2>Reset Your Password</h2>
+
+  <p class="note">
+    Enter your employee email address.
+    We'll send you a password reset link.
+  </p>
+
+  <label for="resetEmail">Email Address</label>
+  <input
+    id="resetEmail"
+    type="email"
+    autocomplete="email"
+    placeholder="Employee email"
+  >
+
+  <button id="sendResetBtn">Send Reset Email</button>
+  <button id="backToLoginBtn" class="secondary">
+    Back to Sign In
+  </button>
+
+  <p id="resetStatus"
+     class="message"
+     aria-live="polite"></p>
 </section>
 
 <div id="app">
@@ -1610,7 +1669,265 @@ async function startApp() {
   await loadSession();
 }
 
-startApp();
+
+/* =========================================
+   INVITATIONS AND PASSWORD RESET
+   ========================================= */
+
+// Capture invitation/recovery information before
+// Supabase processes the URL.
+const initialAuthParams = new URLSearchParams(
+  window.location.hash.replace(/^#/, "")
+);
+
+const initialQueryParams = new URLSearchParams(
+  window.location.search
+);
+
+const initialAuthType =
+  initialAuthParams.get("type") ||
+  initialQueryParams.get("type") ||
+  "";
+
+const hasAuthCallback =
+  initialAuthParams.has("access_token") ||
+  initialQueryParams.has("code") ||
+  initialQueryParams.has("token_hash");
+
+const isPasswordCallback =
+  hasAuthCallback &&
+  (initialAuthType === "invite" ||
+   initialAuthType === "recovery");
+
+let passwordSetupMode = isPasswordCallback
+  ? initialAuthType
+  : null;
+
+function showAuthScreen(screen) {
+  $("loginPanel").style.display =
+    screen === "login" ? "block" : "none";
+
+  $("passwordSetupPanel").style.display =
+    screen === "password" ? "block" : "none";
+
+  $("forgotPasswordPanel").style.display =
+    screen === "forgot" ? "block" : "none";
+
+  $("app").style.display =
+    screen === "app" ? "block" : "none";
+}
+
+function openPasswordSetup(type) {
+  passwordSetupMode = type;
+
+  const recovery = type === "recovery";
+
+  $("passwordSetupTitle").textContent =
+    recovery
+      ? "Reset Your Password"
+      : "Welcome! Create Your Password";
+
+  $("passwordSetupDescription").textContent =
+    recovery
+      ? "Enter and confirm your new password."
+      : "Your invitation was accepted. Create a password to finish setting up your employee login.";
+
+  $("newPassword").value = "";
+  $("confirmPassword").value = "";
+
+  message("passwordSetupStatus", "");
+  showAuthScreen("password");
+}
+
+$("forgotPasswordBtn").onclick = () => {
+  $("resetEmail").value = $("loginEmail").value;
+  message("resetStatus", "");
+  showAuthScreen("forgot");
+};
+
+$("backToLoginBtn").onclick = () => {
+  showAuthScreen("login");
+};
+
+$("sendResetBtn").onclick = async () => {
+  const email = $("resetEmail").value.trim();
+
+  if (!email) {
+    message("resetStatus", "Enter your email address.");
+    return;
+  }
+
+  $("sendResetBtn").disabled = true;
+  message("resetStatus", "Sending reset email...");
+
+  try {
+    const { error } = await db.auth.resetPasswordForEmail(
+      email,
+      {
+        redirectTo:
+          "https://enkious-beep.github.io/coop-tag-maker/"
+      }
+    );
+
+    if (error) throw error;
+
+    message(
+      "resetStatus",
+      "If an account exists for that email, a reset link will be sent. Check your inbox and spam folder."
+    );
+  } catch (error) {
+    message("resetStatus", errorText(error));
+  } finally {
+    $("sendResetBtn").disabled = false;
+  }
+};
+
+$("setPasswordBtn").onclick = async () => {
+  const password = $("newPassword").value;
+  const confirmation = $("confirmPassword").value;
+
+  if (password.length < 8) {
+    message(
+      "passwordSetupStatus",
+      "Password must contain at least 8 characters."
+    );
+    return;
+  }
+
+  if (password !== confirmation) {
+    message(
+      "passwordSetupStatus",
+      "Passwords do not match."
+    );
+    return;
+  }
+
+  $("setPasswordBtn").disabled = true;
+  message(
+    "passwordSetupStatus",
+    "Saving your password..."
+  );
+
+  try {
+    const { data: sessionData } =
+      await db.auth.getSession();
+
+    if (!sessionData.session) {
+      throw new Error(
+        "Your invitation or reset link is no longer valid. Ask your administrator for a new link."
+      );
+    }
+
+    const { error } = await db.auth.updateUser({
+      password
+    });
+
+    if (error) throw error;
+
+    $("newPassword").value = "";
+    $("confirmPassword").value = "";
+
+    // The account is ready for normal login.
+    // Employee database access is still controlled
+    // by the employee_profiles table.
+    await db.auth.signOut();
+
+    passwordSetupMode = null;
+
+    window.history.replaceState(
+      {},
+      document.title,
+      window.location.pathname
+    );
+
+    showAuthScreen("login");
+
+    message(
+      "loginStatus",
+      "Password saved successfully! Sign in with your email and new password."
+    );
+  } catch (error) {
+    message(
+      "passwordSetupStatus",
+      errorText(error)
+    );
+  } finally {
+    $("setPasswordBtn").disabled = false;
+  }
+};
+
+/*
+  Override the original startup behavior so
+  invitations and recovery links are handled
+  before displaying the normal employee login.
+*/
+
+async function startWithAuthentication() {
+  updatePreview();
+
+  if (
+    SUPABASE_KEY ===
+    "PASTE_YOUR_PUBLISHABLE_KEY_HERE"
+  ) {
+    showAuthScreen("login");
+    message(
+      "loginStatus",
+      "Setup needed: Add your Supabase publishable key."
+    );
+    $("loginBtn").disabled = true;
+    return;
+  }
+
+  if (!window.supabase) {
+    showAuthScreen("login");
+    message(
+      "loginStatus",
+      "Supabase could not load. Check your internet connection."
+    );
+    return;
+  }
+
+  db = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_KEY,
+    {
+      auth: {
+        detectSessionInUrl: true,
+        persistSession: true,
+        autoRefreshToken: true
+      }
+    }
+  );
+
+  db.auth.onAuthStateChange((event) => {
+    if (event === "PASSWORD_RECOVERY") {
+      openPasswordSetup("recovery");
+    }
+  });
+
+  if (isPasswordCallback) {
+    // Allow Supabase to finish processing the
+    // invitation/recovery authentication callback.
+    const { data, error } = await db.auth.getSession();
+
+    if (error || !data.session) {
+      showAuthScreen("login");
+      message(
+        "loginStatus",
+        "This invitation or reset link could not be verified. Request a fresh link."
+      );
+      return;
+    }
+
+    openPasswordSetup(initialAuthType);
+    return;
+  }
+
+  await loadSession();
+}
+
+startWithAuthentication();
+
 </script>
 
 </body>
