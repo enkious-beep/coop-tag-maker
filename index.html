@@ -182,6 +182,11 @@ button:disabled {
 #preview { margin: 15px 0; }
 
 #sheet { display: none; }
+.date-list { display: grid; gap: 7px; margin: 14px 0; }
+.date-day { width: 100%; margin: 0; text-align: left; background: #e3ece1; color: #174b20; }
+.date-day.active { background: #169a0c; color: white; }
+.select-all { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
+#productResults:empty, #searchStatus:empty { display: none; }
 
 /* ORIGINAL SHELF TAG */
 
@@ -486,8 +491,9 @@ button:disabled {
   <h3>Tag Preview</h3>
   <div id="preview" class="tag"></div>
 
-  <button id="saveBtn">Save Product</button>
-  <button id="addBtn">Save to Un-Printed Tags</button>
+  <button id="addBtn">Save &amp; Add to Unprinted Tags</button>
+  <button id="saveChangesBtn" class="secondary" style="display:none">Save Product Changes</button>
+  <p id="productModeNote" class="note">New product: save it and add a tag in one click.</p>
 
   <p id="saveStatus" class="message" aria-live="polite"></p>
 </section>
@@ -502,9 +508,7 @@ button:disabled {
          placeholder="Example: Annie's, cheddar, or UPC">
 
   <button id="searchBtn">Search Products</button>
-  <button class="secondary" id="recentBtn">
-    Show Recent
-  </button>
+  <button class="secondary" id="clearSearchBtn">Clear Search</button>
 
   <p id="searchStatus" class="note"></p>
   <div id="productResults"></div>
@@ -523,6 +527,10 @@ button:disabled {
     Printing does not automatically remove them.
   </p>
 
+  <div id="pendingDays" class="date-list"></div>
+  <div id="selectedDayHeading" class="item-title"></div>
+  <label class="select-all"><input type="checkbox" id="selectAllPending"> Select All on This Day</label>
+
   <div class="row">
     <button id="printSelectedBtn">
       Print Selected
@@ -532,6 +540,7 @@ button:disabled {
     </button>
   </div>
 
+  <button id="markSelectedPrintedBtn" class="secondary">Mark Selected Printed</button>
   <p id="pendingStatus" class="message"
      aria-live="polite"></p>
 
@@ -570,6 +579,29 @@ let scanning = false;
 let pendingTags = [];
 let selectedPendingIds = new Set();
 let printingIds = [];
+let loadedSavedProduct = null;
+let activePendingDay = null;
+const STORE_TIMEZONE = "America/Phoenix";
+const storeDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: STORE_TIMEZONE, year: "numeric", month: "2-digit", day: "2-digit"
+});
+function storeDay(value) {
+  const parts = Object.fromEntries(storeDateFormatter.formatToParts(new Date(value)).map(p => [p.type, p.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+function todayStoreDay() { return storeDay(new Date()); }
+function prettyStoreDay(day) {
+  const [year,month,date] = day.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", { month:"long", day:"numeric", year:"numeric", timeZone:"UTC" }).format(new Date(Date.UTC(year,month-1,date)));
+}
+function updateProductActions() {
+  const isExisting = !!loadedSavedProduct && $("upc").value.trim() === loadedSavedProduct.upc;
+  $("addBtn").textContent = isExisting ? "Add to Unprinted Tags" : "Save & Add to Unprinted Tags";
+  $("saveChangesBtn").style.display = isExisting ? "inline-block" : "none";
+  $("productModeNote").textContent = isExisting
+    ? "Saved product: add a replacement tag, or save changes if you edited its details."
+    : "New product: save it and add a tag in one click.";
+}
 
 function message(id, value) {
   $(id).textContent = value;
@@ -709,7 +741,7 @@ function updatePreview() {
 }
 
 ["upc", "brand", "product"].forEach(id => {
-  $(id).addEventListener("input", updatePreview);
+  $(id).addEventListener("input", () => { updatePreview(); updateProductActions(); });
 });
 
 document.querySelectorAll(
@@ -767,7 +799,6 @@ async function loadSession() {
   showApp(true);
 
   await Promise.all([
-    loadRecentProducts(),
     loadPendingTags()
   ]);
 }
@@ -835,7 +866,9 @@ function clearProduct() {
   $("product").value = "";
 
   resetQuestions();
+  loadedSavedProduct = null;
   updatePreview();
+  updateProductActions();
 
   message("status", "");
   message("saveStatus", "");
@@ -844,6 +877,7 @@ function clearProduct() {
 $("newBtn").onclick = clearProduct;
 
 function fillProduct(item) {
+  loadedSavedProduct = item;
   $("upc").value = item.upc || "";
   $("brand").value = item.brand || "";
   $("product").value = item.product_name || "";
@@ -853,6 +887,7 @@ function fillProduct(item) {
   setQuestion("snap", !!item.snap_eligible);
 
   updatePreview();
+  updateProductActions();
 
   message("status", "Loaded from saved Co-op catalog.");
   message("saveStatus", "");
@@ -877,9 +912,11 @@ async function lookup() {
   }
 
   resetQuestions();
+  loadedSavedProduct = null;
   $("brand").value = "";
   $("product").value = "";
   updatePreview();
+  updateProductActions();
 
   message("status", "Searching saved Co-op products...");
 
@@ -1022,30 +1059,26 @@ async function saveProductRecord(data) {
   return created;
 }
 
-$("saveBtn").onclick = async () => {
+$("saveChangesBtn").onclick = async () => {
   const data = requireCompleteProduct();
-  if (!data) return;
-
-  $("saveBtn").disabled = true;
-  message("saveStatus", "Saving product...");
-
-  try {
-    await saveProductRecord(data);
-
-    message(
-      "saveStatus",
-      "Product saved to shared Co-op catalog!"
-    );
-
-    await loadRecentProducts();
-  } catch (error) {
-    message(
-      "saveStatus",
-      "Could not save product: " + errorText(error)
-    );
-  } finally {
-    $("saveBtn").disabled = false;
+  if (!data || !loadedSavedProduct) return;
+  if (data.upc !== loadedSavedProduct.upc) {
+    alert("To change the UPC, create a new product or contact the administrator.");
+    return;
   }
+  $("saveChangesBtn").disabled = true;
+  try {
+    const { data: updated, error } = await db.from("products")
+      .update({ brand: data.brand, product_name: data.product, organic: data.organic,
+        snap_eligible: data.snap, updated_at: new Date().toISOString() })
+      .eq("id", loadedSavedProduct.id).select().single();
+    if (error) throw error;
+    loadedSavedProduct = updated;
+    message("saveStatus", "Product changes saved!");
+    if ($("searchInput").value.trim()) await searchProducts();
+    updateProductActions();
+  } catch (error) { message("saveStatus", errorText(error)); }
+  finally { $("saveChangesBtn").disabled = false; }
 };
 
 /* =========================================
@@ -1097,7 +1130,7 @@ function makeProductItem(item) {
 
   actions.appendChild(
     makeButton(
-      "Add Tag",
+      "Add to Unprinted Tags",
       "small secondary",
       async () => {
         try {
@@ -1166,34 +1199,16 @@ function displayProducts(items) {
   });
 }
 
-async function loadRecentProducts() {
-  message("searchStatus", "Loading recent products...");
-
-  const { data, error } = await db
-    .from("products")
-    .select("*")
-    .order("updated_at", { ascending: false })
-    .limit(30);
-
-  if (error) {
-    message("searchStatus", errorText(error));
-    return;
-  }
-
-  displayProducts(data || []);
-
-  message(
-    "searchStatus",
-    "Showing " + (data || []).length +
-    " recently saved products."
-  );
+function clearSearchResults() {
+  $("productResults").replaceChildren();
+  message("searchStatus", "");
 }
 
 async function searchProducts() {
   const term = $("searchInput").value.trim();
 
   if (!term) {
-    await loadRecentProducts();
+    clearSearchResults();
     return;
   }
 
@@ -1245,7 +1260,13 @@ async function searchProducts() {
 }
 
 $("searchBtn").onclick = searchProducts;
-$("recentBtn").onclick = loadRecentProducts;
+$("clearSearchBtn").onclick = () => {
+  $("searchInput").value = "";
+  clearSearchResults();
+};
+$("searchInput").addEventListener("input", () => {
+  if (!$("searchInput").value.trim()) clearSearchResults();
+});
 
 $("searchInput").addEventListener("keydown", e => {
   if (e.key === "Enter") searchProducts();
@@ -1275,185 +1296,156 @@ async function addPendingTag(productRecord) {
 }
 
 $("addBtn").onclick = async () => {
-  const data = requireCompleteProduct();
+  const isExisting = !!loadedSavedProduct && $("upc").value.trim() === loadedSavedProduct.upc;
+  const data = isExisting ? getProduct() : requireCompleteProduct();
   if (!data) return;
-
   $("addBtn").disabled = true;
-  message("saveStatus", "Saving product and tag...");
-
+  message("saveStatus", isExisting ? "Adding replacement tag..." : "Saving product and tag...");
   try {
-    const productRecord =
-      await saveProductRecord(data);
-
-    await addPendingTag(productRecord);
-
-    message(
-      "saveStatus",
-      "Product saved and tag added to Un-Printed Tags!"
-    );
-
-    await loadRecentProducts();
+    let record;
+    if (isExisting) {
+      // Do not silently overwrite edits while requesting a replacement tag.
+      record = loadedSavedProduct;
+    } else {
+      const { data: alreadySaved, error: findError } = await db.from("products")
+        .select("*").eq("upc", data.upc).maybeSingle();
+      if (findError) throw findError;
+      record = alreadySaved || await saveProductRecord(data);
+    }
+    await addPendingTag(record);
+    loadedSavedProduct = record;
+    updateProductActions();
+    message("saveStatus", isExisting || record.product_name !== data.product
+      ? "Replacement tag added to Unprinted Tags!"
+      : "Product saved and added to Unprinted Tags!");
   } catch (error) {
-    message(
-      "saveStatus",
-      "Could not save tag: " + errorText(error)
-    );
-  } finally {
-    $("addBtn").disabled = false;
-  }
+    message("saveStatus", "Could not add tag: " + errorText(error));
+  } finally { $("addBtn").disabled = false; }
 };
 
 async function loadPendingTags() {
   message("pendingStatus", "Loading unprinted tags...");
-
-  const { data, error } = await db
-    .from("unprinted_tags")
-    .select(
-      "id, product_id, quantity, created_at, products(id, upc, brand, product_name, organic, snap_eligible)"
-    )
-    .order("created_at", { ascending: false })
-    .limit(500);
-
-  if (error) {
-    message(
-      "pendingStatus",
-      "Could not load tags: " + errorText(error)
-    );
-    return;
+  try {
+    // Read in pages so older unprinted dates do not vanish after 500 rows.
+    const all = [];
+    const pageSize = 500;
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await db.from("unprinted_tags")
+        .select("id, product_id, quantity, created_at, products(id, upc, brand, product_name, organic, snap_eligible)")
+        .order("created_at", { ascending: false })
+        .range(offset, offset + pageSize - 1);
+      if (error) throw error;
+      all.push(...(data || []));
+      if (!data || data.length < pageSize) break;
+    }
+    pendingTags = all;
+    const ids = new Set(pendingTags.map(t => t.id));
+    selectedPendingIds = new Set([...selectedPendingIds].filter(id => ids.has(id)));
+    renderPendingTags();
+    message("pendingStatus", "");
+  } catch (error) {
+    message("pendingStatus", "Could not load tags: " + errorText(error));
   }
+}
 
-  pendingTags = data || [];
-
-  const currentIds = new Set(
-    pendingTags.map(item => item.id)
-  );
-
-  selectedPendingIds = new Set(
-    [...selectedPendingIds].filter(id =>
-      currentIds.has(id)
-    )
-  );
-
-  renderPendingTags();
-
-  message("pendingStatus", "");
+function visiblePendingTags() {
+  return pendingTags.filter(t => storeDay(t.created_at) === activePendingDay);
 }
 
 function renderPendingTags() {
   const list = $("pendingList");
+  const daysBox = $("pendingDays");
   list.replaceChildren();
-
-  const total = pendingTags.reduce(
-    (sum, item) => sum + item.quantity,
-    0
-  );
-
-  $("pendingCount").textContent = total;
-
-  if (!pendingTags.length) {
-    list.appendChild(
-      createText(
-        "note",
-        "No unprinted tags. You're all caught up!"
-      )
-    );
+  daysBox.replaceChildren();
+  const dayTotals = new Map();
+  pendingTags.forEach(t => {
+    const day = storeDay(t.created_at);
+    dayTotals.set(day, (dayTotals.get(day) || 0) + t.quantity);
+  });
+  const days = [...dayTotals.keys()].sort().reverse();
+  const today = todayStoreDay();
+  if (!activePendingDay || (!days.includes(activePendingDay) && activePendingDay !== today)) {
+    activePendingDay = today;
+  }
+  $("pendingCount").textContent = pendingTags.reduce((sum,t)=>sum+t.quantity,0);
+  // Always show Today; older dates only when unprinted tags remain.
+  const availableDays = [...new Set([today, ...days])].sort().reverse();
+  availableDays.forEach(day => {
+    const total = dayTotals.get(day) || 0;
+    const label = day === today ? "Today — " + prettyStoreDay(day) : prettyStoreDay(day);
+    const button = makeButton(`${label}  •  ${total} tag${total===1?"":"s"}`,
+      "date-day" + (day === activePendingDay ? " active" : ""), () => {
+        activePendingDay = day;
+        selectedPendingIds.clear();
+        renderPendingTags();
+      });
+    daysBox.appendChild(button);
+  });
+  $("selectedDayHeading").textContent = (activePendingDay === today ? "Today — " : "") + prettyStoreDay(activePendingDay);
+  const visible = visiblePendingTags();
+  const selectedCount = visible.filter(t => selectedPendingIds.has(t.id)).length;
+  $("selectAllPending").checked = visible.length > 0 && selectedCount === visible.length;
+  $("selectAllPending").indeterminate = selectedCount > 0 && selectedCount < visible.length;
+  $("selectAllPending").disabled = !visible.length;
+  $("printSelectedBtn").disabled = selectedCount === 0;
+  $("markSelectedPrintedBtn").disabled = selectedCount === 0;
+  if (!visible.length) {
+    list.appendChild(createText("note", "No unprinted tags for this day."));
     return;
   }
-
-  pendingTags.forEach(item => {
+  visible.forEach(item => {
     const product = item.products;
-
     if (!product) return;
-
     const box = document.createElement("div");
     box.className = "item";
-
     const top = document.createElement("div");
     top.className = "row";
-
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
-    checkbox.checked =
-      selectedPendingIds.has(item.id);
-
+    checkbox.checked = selectedPendingIds.has(item.id);
+    checkbox.setAttribute("aria-label", "Select " + product.product_name);
     checkbox.onchange = () => {
-      if (checkbox.checked) {
-        selectedPendingIds.add(item.id);
-      } else {
-        selectedPendingIds.delete(item.id);
-      }
+      if (checkbox.checked) selectedPendingIds.add(item.id);
+      else selectedPendingIds.delete(item.id);
+      renderPendingTags();
     };
-
-    const title = createText(
-      "item-title grow",
-      product.brand + " — " + product.product_name
-    );
-
-    top.append(checkbox, title);
-
+    top.append(checkbox, createText("item-title grow", product.brand + " — " + product.product_name));
     box.appendChild(top);
-
-    box.appendChild(
-      createText(
-        "item-details",
-        "UPC: " + product.upc +
-        " | Quantity: " + item.quantity
-      )
-    );
-
+    box.appendChild(createText("item-details", "UPC: " + product.upc + " | Quantity: " + item.quantity));
     const actions = document.createElement("div");
     actions.className = "item-actions";
-
-    actions.appendChild(
-      makeButton(
-        "Print",
-        "small",
-        () => printPending([item.id])
-      )
-    );
-
-    actions.appendChild(
-      makeButton(
-        "Qty −",
-        "small secondary",
-        () => changeQuantity(
-          item,
-          Math.max(1, item.quantity - 1)
-        )
-      )
-    );
-
-    actions.appendChild(
-      makeButton(
-        "Qty +",
-        "small secondary",
-        () => changeQuantity(
-          item,
-          Math.min(500, item.quantity + 1)
-        )
-      )
-    );
-
-    actions.appendChild(
-      makeButton(
-        "Mark Printed",
-        "small secondary",
-        () => markPrinted(item.id)
-      )
-    );
-
-    actions.appendChild(
-      makeButton(
-        "Delete",
-        "small danger",
-        () => deletePending(item.id)
-      )
-    );
-
+    actions.appendChild(makeButton("Print", "small", () => printPending([item.id])));
+    actions.appendChild(makeButton("Qty −", "small secondary", () => changeQuantity(item, Math.max(1,item.quantity-1))));
+    actions.appendChild(makeButton("Qty +", "small secondary", () => changeQuantity(item, Math.min(500,item.quantity+1))));
+    actions.appendChild(makeButton("Mark Printed", "small secondary", () => markPrinted(item.id)));
+    actions.appendChild(makeButton("Delete", "small danger", () => deletePending(item.id)));
     box.appendChild(actions);
     list.appendChild(box);
   });
 }
+
+$("selectAllPending").onchange = e => {
+  visiblePendingTags().forEach(t => {
+    if (e.target.checked) selectedPendingIds.add(t.id);
+    else selectedPendingIds.delete(t.id);
+  });
+  renderPendingTags();
+};
+
+$("markSelectedPrintedBtn").onclick = async () => {
+  const ids = visiblePendingTags().filter(t => selectedPendingIds.has(t.id)).map(t=>t.id);
+  if (!ids.length) return;
+  if (!confirm(`Mark ${ids.length} selected tag entr${ids.length===1?"y":"ies"} as printed? This removes them from the unprinted queue, not the product catalog.`)) return;
+  $("markSelectedPrintedBtn").disabled = true;
+  try {
+    for (let i=0;i<ids.length;i+=100) {
+      const { error } = await db.from("unprinted_tags").delete().in("id",ids.slice(i,i+100));
+      if (error) throw error;
+    }
+    ids.forEach(id=>selectedPendingIds.delete(id));
+    await loadPendingTags();
+  } catch(error) { alert("Could not mark printed: " + errorText(error)); await loadPendingTags(); }
+};
 
 async function changeQuantity(item, quantity) {
   if (quantity === item.quantity) return;
@@ -1513,7 +1505,7 @@ async function markPrinted(id) {
 $("refreshPendingBtn").onclick = loadPendingTags;
 
 $("printSelectedBtn").onclick = () => {
-  printPending([...selectedPendingIds]);
+  printPending(visiblePendingTags().filter(t=>selectedPendingIds.has(t.id)).map(t=>t.id));
 };
 
 /* =========================================
@@ -1637,10 +1629,11 @@ $("scanBtn").onclick = async () => {
 
 async function startApp() {
   updatePreview();
+  updateProductActions();
 
   if (
     SUPABASE_KEY ===
-    "sb_publishable_pPtSuCMGsSbTYU-HWv5Ksg_wlYIKGOs"
+    "PASTE_YOUR_PUBLISHABLE_KEY_HERE"
   ) {
     showApp(false);
     message(
