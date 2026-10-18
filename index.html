@@ -8,6 +8,7 @@
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
 <style>
 * { box-sizing: border-box; }
@@ -29,7 +30,7 @@ header {
 header h1 { margin: 0 0 5px; }
 
 main {
-  max-width: 750px;
+  max-width: 850px;
   margin: auto;
   padding: 16px;
 }
@@ -43,6 +44,7 @@ main {
 }
 
 h2 { margin-top: 0; font-size: 19px; }
+h3 { margin: 14px 0 8px; }
 
 label {
   display: block;
@@ -50,12 +52,21 @@ label {
   font-weight: bold;
 }
 
-input[type=text] {
+input[type=text],
+input[type=email],
+input[type=password],
+input[type=number] {
   width: 100%;
   padding: 12px;
   border: 1px solid #a6b9a3;
   border-radius: 7px;
   font-size: 16px;
+}
+
+input[type=checkbox] {
+  width: 18px;
+  height: 18px;
+  vertical-align: middle;
 }
 
 button {
@@ -75,6 +86,15 @@ button.secondary {
   color: #174b20;
 }
 
+button.danger {
+  background: #a52323;
+}
+
+button.small {
+  padding: 8px 11px;
+  font-size: 13px;
+}
+
 button:disabled {
   opacity: .5;
   cursor: not-allowed;
@@ -83,6 +103,12 @@ button:disabled {
 .note {
   color: #637267;
   font-size: 13px;
+}
+
+.message {
+  min-height: 20px;
+  font-size: 14px;
+  margin: 10px 0;
 }
 
 .question {
@@ -103,18 +129,61 @@ button:disabled {
   font-weight: normal;
 }
 
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.row > .grow { flex: 1; }
+
 #reader {
   width: 100%;
   max-width: 420px;
   margin: 10px auto;
 }
 
-#status {
-  min-height: 20px;
-  font-size: 14px;
+.item {
+  border: 1px solid #d5dfd3;
+  border-radius: 9px;
+  padding: 12px;
+  margin: 10px 0;
+  background: #fbfdfb;
 }
 
-/* SHELF TAG */
+.item-title {
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+.item-details {
+  color: #526658;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.item-actions { margin-top: 8px; }
+
+.item-actions button { margin-bottom: 0; }
+
+#app, #loginPanel { display: none; }
+
+#accountBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+#accountBar button { margin: 0; }
+
+#preview { margin: 15px 0; }
+
+#sheet { display: none; }
+
+/* ORIGINAL SHELF TAG */
 
 .tag {
   position: relative;
@@ -149,8 +218,6 @@ button:disabled {
   overflow: hidden;
 }
 
-/* BOLD DOLLAR SIGN ABOVE BARCODE */
-
 .tag-dollar {
   position: absolute;
   left: 8px;
@@ -160,8 +227,6 @@ button:disabled {
   line-height: 1;
   color: black;
 }
-
-/* BOTTOM ROW */
 
 .tag-footer {
   position: absolute;
@@ -216,34 +281,20 @@ button:disabled {
   white-space: nowrap;
 }
 
-#preview {
-  margin: 15px 0;
-}
-
-#sheet {
-  display: none;
-}
-
-/* PRINTING */
-
 @page {
   size: letter;
   margin: .35in;
 }
 
 @media print {
-  header, main {
-    display: none !important;
-  }
+  header, main { display: none !important; }
 
   body {
     background: white;
     margin: 0;
   }
 
-  #sheet {
-    display: block !important;
-  }
+  #sheet { display: block !important; }
 
   .print-page {
     display: grid;
@@ -277,32 +328,66 @@ button:disabled {
 
 <header>
   <h1>Co-op Tag Maker</h1>
-  <div>Scan • Confirm • Print</div>
+  <div>Scan • Save • Search • Print</div>
 </header>
 
 <main>
 
+<section id="loginPanel" class="panel">
+  <h2>Employee Login</h2>
+  <p class="note">
+    Sign in with your Co-op Tag Maker employee account.
+  </p>
+
+  <label for="loginEmail">Email</label>
+  <input id="loginEmail" type="email"
+         autocomplete="username"
+         placeholder="Employee email">
+
+  <label for="loginPassword">Password</label>
+  <input id="loginPassword" type="password"
+         autocomplete="current-password"
+         placeholder="Password">
+
+  <button id="loginBtn">Sign In</button>
+  <p id="loginStatus" class="message" aria-live="polite"></p>
+</section>
+
+<div id="app">
+
 <section class="panel">
-  <h2>1. Scan Product</h2>
+  <div id="accountBar">
+    <div>
+      <strong id="welcome">Welcome</strong>
+      <div id="roleLabel" class="note"></div>
+    </div>
+    <button id="logoutBtn" class="secondary">
+      Sign Out
+    </button>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>1. Find or Scan Product</h2>
 
   <button id="scanBtn">Scan Barcode</button>
 
-  <button class="secondary" id="stopBtn" style="display:none">
+  <button class="secondary" id="stopBtn"
+          style="display:none">
     Stop Camera
   </button>
 
   <div id="reader" style="display:none"></div>
 
   <label for="upc">Barcode / UPC</label>
-  <input
-    id="upc"
-    type="text"
-    inputmode="numeric"
-    placeholder="Scan or enter barcode"
-  >
+  <input id="upc" type="text"
+         inputmode="numeric"
+         placeholder="Scan or enter barcode">
 
   <button id="lookupBtn">Find Product</button>
-  <p id="status" aria-live="polite"></p>
+  <button class="secondary" id="newBtn">New Product</button>
+
+  <p id="status" class="message" aria-live="polite"></p>
 </section>
 
 <section class="panel">
@@ -316,74 +401,120 @@ button:disabled {
 
   <div class="question">
     <strong>Is this Organic?</strong>
-
     <label>
-      <input type="radio" name="organic" value="yes">
-      Yes
+      <input type="radio" name="organic" value="yes"> Yes
     </label>
-
     <label>
-      <input type="radio" name="organic" value="no">
-      No
+      <input type="radio" name="organic" value="no"> No
     </label>
   </div>
 
   <div class="question">
     <strong>Is this SNAP eligible?</strong>
-
     <label>
-      <input type="radio" name="snap" value="yes">
-      Yes
+      <input type="radio" name="snap" value="yes"> Yes
     </label>
-
     <label>
-      <input type="radio" name="snap" value="no">
-      No
+      <input type="radio" name="snap" value="no"> No
     </label>
   </div>
 
   <p class="note">
-    Verify both answers before creating a tag.
+    Verify Organic and SNAP eligibility manually.
     Product lookup does not determine SNAP eligibility.
   </p>
 
-  <h2>Tag Preview</h2>
-
+  <h3>Tag Preview</h3>
   <div id="preview" class="tag"></div>
 
-  <button id="addBtn">Add Tag to Sheet</button>
+  <button id="saveBtn">Save Product</button>
+  <button id="addBtn">Save to Un-Printed Tags</button>
+
+  <p id="saveStatus" class="message" aria-live="polite"></p>
 </section>
 
 <section class="panel">
-  <h2>3. Print Tags</h2>
+  <h2>3. Search Saved Products</h2>
 
-  <p>
-    <strong id="count">0</strong> tags in the print queue.
-  </p>
+  <label for="searchInput">
+    Search by UPC, Brand, or Product Name
+  </label>
+  <input id="searchInput" type="text"
+         placeholder="Example: Annie's, cheddar, or UPC">
 
-  <p class="note">
-    14 tags per letter-size sheet.
-  </p>
+  <button id="searchBtn">Search Products</button>
+  <button class="secondary" id="recentBtn">
+    Show Recent
+  </button>
 
-  <button id="printBtn">Print / Save as PDF</button>
-  <button class="secondary" id="clearBtn">Clear Sheet</button>
-
-  <p class="note">
-    Use your phone's print menu to save a PDF or
-    choose a compatible printer.
-  </p>
+  <p id="searchStatus" class="note"></p>
+  <div id="productResults"></div>
 </section>
 
+<section class="panel">
+  <h2>4. Un-Printed Tags</h2>
+
+  <p>
+    <strong id="pendingCount">0</strong>
+    tags waiting to print.
+  </p>
+
+  <p class="note">
+    These tags are shared between employees.
+    Printing does not automatically remove them.
+  </p>
+
+  <div class="row">
+    <button id="printSelectedBtn">
+      Print Selected
+    </button>
+    <button class="secondary" id="refreshPendingBtn">
+      Refresh List
+    </button>
+  </div>
+
+  <p id="pendingStatus" class="message"
+     aria-live="polite"></p>
+
+  <div id="pendingList"></div>
+</section>
+
+</div>
 </main>
 
 <div id="sheet"></div>
 
 <script>
+/* =========================================
+   SUPABASE CONNECTION
+   ========================================= */
+
+const SUPABASE_URL =
+  "https://wejamrklsvlwixjghqor.supabase.co";
+
+const SUPABASE_KEY =
+  "sb_publishable_pPtSuCMGsSbTYU-HWv5Ksg_wlYIKGOs";
+
+/*
+  Only use the sb_publishable_ key above.
+  NEVER put a secret key, service_role key,
+  or database password in this website.
+*/
+
 const $ = id => document.getElementById(id);
 
-let queue = [];
+let db = null;
+let currentUser = null;
+let currentProfile = null;
 let scanner = null;
 let scanning = false;
+let pendingTags = [];
+let selectedPendingIds = new Set();
+let printingIds = [];
+
+function message(id, value) {
+  $(id).textContent = value;
+}
 
 function selected(name) {
   return document.querySelector(
@@ -394,9 +525,15 @@ function selected(name) {
 function resetQuestions() {
   document.querySelectorAll(
     'input[type="radio"]'
-  ).forEach(r => {
-    r.checked = false;
-  });
+  ).forEach(r => r.checked = false);
+}
+
+function setQuestion(name, yes) {
+  const value = yes ? "yes" : "no";
+  const radio = document.querySelector(
+    `input[name="${name}"][value="${value}"]`
+  );
+  if (radio) radio.checked = true;
 }
 
 function getProduct() {
@@ -409,7 +546,35 @@ function getProduct() {
   };
 }
 
-/* CREATE TAG */
+function requireCompleteProduct() {
+  const data = getProduct();
+
+  if (!data.upc || !data.brand || !data.product) {
+    alert("Enter UPC, brand, and product name.");
+    return null;
+  }
+
+  if (!selected("organic") || !selected("snap")) {
+    alert("Answer BOTH Organic and SNAP questions.");
+    return null;
+  }
+
+  return data;
+}
+
+function showApp(visible) {
+  $("app").style.display = visible ? "block" : "none";
+  $("loginPanel").style.display =
+    visible ? "none" : "block";
+}
+
+function errorText(error) {
+  return error?.message || "Something went wrong.";
+}
+
+/* =========================================
+   SHELF TAG - SAME DESIGN AS BEFORE
+   ========================================= */
 
 function makeTag(data) {
   const tag = document.createElement("div");
@@ -421,7 +586,12 @@ function makeTag(data) {
 
   const name = document.createElement("div");
   name.className = "tag-name";
-  name.textContent = data.product || "Product name";
+  name.textContent =
+    data.product || data.product_name || "Product name";
+
+  const dollar = document.createElement("div");
+  dollar.className = "tag-dollar";
+  dollar.textContent = "$";
 
   const footer = document.createElement("div");
   footer.className = "tag-footer";
@@ -430,8 +600,7 @@ function makeTag(data) {
   barcodeBox.className = "tag-barcode";
 
   const barcode = document.createElementNS(
-    "http://www.w3.org/2000/svg",
-    "svg"
+    "http://www.w3.org/2000/svg", "svg"
   );
 
   barcodeBox.appendChild(barcode);
@@ -439,9 +608,7 @@ function makeTag(data) {
   const flags = document.createElement("div");
   flags.className = "tag-flags";
 
-  /* SNAP FIRST */
-
-  if (data.snap) {
+  if (data.snap || data.snap_eligible) {
     const snap = document.createElement("img");
     snap.className = "tag-snap";
     snap.src = "snap-logo-Color.jpg";
@@ -449,20 +616,12 @@ function makeTag(data) {
     flags.appendChild(snap);
   }
 
-  /* ORGANIC BELOW SNAP */
-
   if (data.organic) {
     const organic = document.createElement("div");
     organic.className = "tag-organic";
     organic.textContent = "ORGANIC";
     flags.appendChild(organic);
   }
-
-  /* HANDWRITTEN PRICE SPACE */
-
-  const dollar = document.createElement("div");
-  dollar.className = "tag-dollar";
-  dollar.textContent = "$";
 
   footer.append(barcodeBox, flags);
   tag.append(header, name, dollar, footer);
@@ -477,25 +636,17 @@ function makeTag(data) {
         height: 32
       });
     } catch (e) {
-      console.warn(
-        "Barcode could not be generated",
-        e
-      );
+      console.warn("Barcode generation failed:", e);
     }
   }
 
   return tag;
 }
 
-/* PREVIEW */
-
 function updatePreview() {
-  $("preview").replaceWith(
-    Object.assign(
-      makeTag(getProduct()),
-      {id: "preview"}
-    )
-  );
+  const preview = makeTag(getProduct());
+  preview.id = "preview";
+  $("preview").replaceWith(preview);
 }
 
 ["upc", "brand", "product"].forEach(id => {
@@ -508,27 +659,195 @@ document.querySelectorAll(
   r.addEventListener("change", updatePreview);
 });
 
-/* PRODUCT LOOKUP */
+/* =========================================
+   EMPLOYEE LOGIN
+   ========================================= */
+
+async function loadSession() {
+  const { data: { user }, error } =
+    await db.auth.getUser();
+
+  if (error || !user) {
+    currentUser = null;
+    currentProfile = null;
+    showApp(false);
+    return;
+  }
+
+  const { data: profile, error: profileError } =
+    await db
+      .from("employee_profiles")
+      .select("id, display_name, role, active")
+      .eq("id", user.id)
+      .maybeSingle();
+
+  if (profileError || !profile || !profile.active) {
+    currentUser = null;
+    currentProfile = null;
+    showApp(false);
+
+    message(
+      "loginStatus",
+      "This account is not activated for the Co-op Tag Maker. Contact the administrator."
+    );
+    return;
+  }
+
+  currentUser = user;
+  currentProfile = profile;
+
+  $("welcome").textContent =
+    "Welcome, " +
+    (profile.display_name || user.email);
+
+  $("roleLabel").textContent =
+    profile.role === "admin"
+      ? "Administrator"
+      : "Employee";
+
+  showApp(true);
+
+  await Promise.all([
+    loadRecentProducts(),
+    loadPendingTags()
+  ]);
+}
+
+$("loginBtn").onclick = async () => {
+  const email = $("loginEmail").value.trim();
+  const password = $("loginPassword").value;
+
+  if (!email || !password) {
+    message("loginStatus", "Enter email and password.");
+    return;
+  }
+
+  $("loginBtn").disabled = true;
+  message("loginStatus", "Signing in...");
+
+  try {
+    const { error } =
+      await db.auth.signInWithPassword({
+        email,
+        password
+      });
+
+    if (error) throw error;
+
+    $("loginPassword").value = "";
+    message("loginStatus", "");
+    await loadSession();
+  } catch (error) {
+    message("loginStatus", errorText(error));
+  } finally {
+    $("loginBtn").disabled = false;
+  }
+};
+
+$("loginPassword").addEventListener("keydown", e => {
+  if (e.key === "Enter") $("loginBtn").click();
+});
+
+$("logoutBtn").onclick = async () => {
+  await stopScanner();
+
+  await db.auth.signOut();
+
+  currentUser = null;
+  currentProfile = null;
+  pendingTags = [];
+  selectedPendingIds.clear();
+
+  $("productResults").replaceChildren();
+  $("pendingList").replaceChildren();
+  $("sheet").replaceChildren();
+
+  showApp(false);
+  message("loginStatus", "Signed out.");
+};
+
+/* =========================================
+   PRODUCT FORM
+   ========================================= */
+
+function clearProduct() {
+  $("upc").value = "";
+  $("brand").value = "";
+  $("product").value = "";
+
+  resetQuestions();
+  updatePreview();
+
+  message("status", "");
+  message("saveStatus", "");
+}
+
+$("newBtn").onclick = clearProduct;
+
+function fillProduct(item) {
+  $("upc").value = item.upc || "";
+  $("brand").value = item.brand || "";
+  $("product").value = item.product_name || "";
+
+  resetQuestions();
+  setQuestion("organic", !!item.organic);
+  setQuestion("snap", !!item.snap_eligible);
+
+  updatePreview();
+
+  message("status", "Loaded from saved Co-op catalog.");
+  message("saveStatus", "");
+
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth"
+  });
+}
+
+/* =========================================
+   LOOKUP SAVED CATALOG FIRST
+   THEN OPEN FOOD FACTS
+   ========================================= */
 
 async function lookup() {
   const upc = $("upc").value.trim();
 
   if (!upc) {
-    $("status").textContent =
-      "Scan or enter a barcode first.";
+    message("status", "Enter or scan a barcode first.");
     return;
   }
 
   resetQuestions();
   $("brand").value = "";
   $("product").value = "";
-
-  $("status").textContent =
-    "Looking up product...";
-
   updatePreview();
 
+  message("status", "Searching saved Co-op products...");
+
   try {
+    const { data: saved, error: savedError } =
+      await db
+        .from("products")
+        .select("*")
+        .eq("upc", upc)
+        .maybeSingle();
+
+    if (savedError) throw savedError;
+
+    if (saved) {
+      fillProduct(saved);
+      message(
+        "status",
+        "Found in saved Co-op catalog!"
+      );
+      return;
+    }
+
+    message(
+      "status",
+      "Not saved yet. Checking Open Food Facts..."
+    );
+
     const url =
       "https://world.openfoodfacts.org/api/v2/product/" +
       encodeURIComponent(upc) +
@@ -537,18 +856,16 @@ async function lookup() {
     const response = await fetch(url);
 
     if (!response.ok) {
-      throw new Error("Lookup failed");
+      throw new Error("External lookup unavailable.");
     }
 
-    const data = await response.json();
+    const result = await response.json();
 
-    if (data.status === 1 && data.product) {
-      const item = data.product;
+    if (result.status === 1 && result.product) {
+      const item = result.product;
 
       const brand = String(
-        item.brands ||
-        item.brand_owner ||
-        ""
+        item.brands || item.brand_owner || ""
       ).split(",")[0].trim();
 
       const productName = String(
@@ -561,24 +878,30 @@ async function lookup() {
       $("product").value = productName;
 
       if (brand && productName) {
-        $("status").textContent =
-          "Product found! Brand and name filled in. Please verify.";
-      } else if (brand || productName) {
-        $("status").textContent =
-          "Partial product information found. Fill in missing fields.";
+        message(
+          "status",
+          "Product found online. Verify the details and answer Organic/SNAP before saving."
+        );
       } else {
-        $("status").textContent =
-          "Product record found, but brand and name are missing. Enter manually.";
+        message(
+          "status",
+          "Partial product record found. Complete missing information."
+        );
       }
     } else {
-      $("status").textContent =
-        "Product not found. Enter the brand and name manually.";
+      message(
+        "status",
+        "Product not found. Enter details manually."
+      );
     }
   } catch (error) {
-    console.error("Product lookup error:", error);
+    console.error(error);
 
-    $("status").textContent =
-      "Lookup unavailable. Enter product details manually.";
+    message(
+      "status",
+      "Lookup problem: " + errorText(error) +
+      " You can still enter product information manually."
+    );
   }
 
   updatePreview();
@@ -586,80 +909,615 @@ async function lookup() {
 
 $("lookupBtn").onclick = lookup;
 
-/* ADD TO PRINT QUEUE */
+$("upc").addEventListener("keydown", e => {
+  if (e.key === "Enter") lookup();
+});
 
-$("addBtn").onclick = () => {
-  const data = getProduct();
+/* =========================================
+   SAVE PRODUCTS
+   ========================================= */
 
-  if (!data.upc || !data.brand || !data.product) {
-    alert(
-      "Please enter the barcode, brand and product name."
-    );
-    return;
+async function saveProductRecord(data) {
+  const record = {
+    upc: data.upc,
+    brand: data.brand,
+    product_name: data.product,
+    organic: data.organic,
+    snap_eligible: data.snap,
+    updated_at: new Date().toISOString()
+  };
+
+  const { data: existing, error: findError } =
+    await db
+      .from("products")
+      .select("id")
+      .eq("upc", data.upc)
+      .maybeSingle();
+
+  if (findError) throw findError;
+
+  if (existing) {
+    const { data: updated, error } =
+      await db
+        .from("products")
+        .update(record)
+        .eq("id", existing.id)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return updated;
   }
 
-  if (!selected("organic") || !selected("snap")) {
-    alert(
-      "Please answer BOTH Organic and SNAP questions."
+  const { data: created, error } =
+    await db
+      .from("products")
+      .insert({
+        ...record,
+        created_by: currentUser.id
+      })
+      .select()
+      .single();
+
+  if (error) throw error;
+  return created;
+}
+
+$("saveBtn").onclick = async () => {
+  const data = requireCompleteProduct();
+  if (!data) return;
+
+  $("saveBtn").disabled = true;
+  message("saveStatus", "Saving product...");
+
+  try {
+    await saveProductRecord(data);
+
+    message(
+      "saveStatus",
+      "Product saved to shared Co-op catalog!"
     );
-    return;
+
+    await loadRecentProducts();
+  } catch (error) {
+    message(
+      "saveStatus",
+      "Could not save product: " + errorText(error)
+    );
+  } finally {
+    $("saveBtn").disabled = false;
   }
-
-  queue.push(data);
-  renderSheet();
-
-  $("status").textContent =
-    "Tag added to sheet!";
 };
 
-/* PRINT SHEETS */
+/* =========================================
+   SEARCH SAVED PRODUCTS
+   ========================================= */
 
-function renderSheet() {
+function makeButton(label, className, callback) {
+  const button = document.createElement("button");
+  button.textContent = label;
+  button.className = className;
+  button.onclick = callback;
+  return button;
+}
+
+function createText(className, value) {
+  const div = document.createElement("div");
+  div.className = className;
+  div.textContent = value;
+  return div;
+}
+
+function makeProductItem(item) {
+  const box = document.createElement("div");
+  box.className = "item";
+
+  box.append(
+    createText(
+      "item-title",
+      item.brand + " — " + item.product_name
+    ),
+    createText(
+      "item-details",
+      "UPC: " + item.upc +
+      " | Organic: " + (item.organic ? "Yes" : "No") +
+      " | SNAP: " + (item.snap_eligible ? "Yes" : "No")
+    )
+  );
+
+  const actions = document.createElement("div");
+  actions.className = "item-actions";
+
+  actions.appendChild(
+    makeButton(
+      "Load / Edit",
+      "small",
+      () => fillProduct(item)
+    )
+  );
+
+  actions.appendChild(
+    makeButton(
+      "Add Tag",
+      "small secondary",
+      async () => {
+        try {
+          await addPendingTag(item);
+        } catch (error) {
+          alert(errorText(error));
+        }
+      }
+    )
+  );
+
+  if (currentProfile?.role === "admin") {
+    actions.appendChild(
+      makeButton(
+        "Delete Product",
+        "small danger",
+        async () => {
+          const ok = confirm(
+            "PERMANENTLY delete this saved product?\n\n" +
+            item.brand + " — " + item.product_name +
+            "\n\nAny unprinted tags for this product will also be deleted."
+          );
+
+          if (!ok) return;
+
+          try {
+            const { error } = await db
+              .from("products")
+              .delete()
+              .eq("id", item.id);
+
+            if (error) throw error;
+
+            await Promise.all([
+              searchProducts(),
+              loadPendingTags()
+            ]);
+          } catch (error) {
+            alert(
+              "Could not delete product: " +
+              errorText(error)
+            );
+          }
+        }
+      )
+    );
+  }
+
+  box.appendChild(actions);
+  return box;
+}
+
+function displayProducts(items) {
+  const results = $("productResults");
+  results.replaceChildren();
+
+  if (!items.length) {
+    results.appendChild(
+      createText("note", "No saved products found.")
+    );
+    return;
+  }
+
+  items.forEach(item => {
+    results.appendChild(makeProductItem(item));
+  });
+}
+
+async function loadRecentProducts() {
+  message("searchStatus", "Loading recent products...");
+
+  const { data, error } = await db
+    .from("products")
+    .select("*")
+    .order("updated_at", { ascending: false })
+    .limit(30);
+
+  if (error) {
+    message("searchStatus", errorText(error));
+    return;
+  }
+
+  displayProducts(data || []);
+
+  message(
+    "searchStatus",
+    "Showing " + (data || []).length +
+    " recently saved products."
+  );
+}
+
+async function searchProducts() {
+  const term = $("searchInput").value.trim();
+
+  if (!term) {
+    await loadRecentProducts();
+    return;
+  }
+
+  message("searchStatus", "Searching products...");
+
+  /*
+    Search all three fields using separate requests.
+    This avoids placing user text inside a raw filter.
+  */
+
+  try {
+    const fields = ["upc", "brand", "product_name"];
+
+    const searches = await Promise.all(
+      fields.map(field =>
+        db
+          .from("products")
+          .select("*")
+          .ilike(field, "%" + term + "%")
+          .order("product_name")
+          .limit(100)
+      )
+    );
+
+    const unique = new Map();
+
+    for (const result of searches) {
+      if (result.error) throw result.error;
+
+      for (const item of result.data || []) {
+        unique.set(item.id, item);
+      }
+    }
+
+    const items = [...unique.values()].sort(
+      (a, b) =>
+        a.product_name.localeCompare(b.product_name)
+    );
+
+    displayProducts(items);
+
+    message(
+      "searchStatus",
+      items.length + " matching saved products."
+    );
+  } catch (error) {
+    message("searchStatus", errorText(error));
+  }
+}
+
+$("searchBtn").onclick = searchProducts;
+$("recentBtn").onclick = loadRecentProducts;
+
+$("searchInput").addEventListener("keydown", e => {
+  if (e.key === "Enter") searchProducts();
+});
+
+/* =========================================
+   SHARED UN-PRINTED TAGS
+   ========================================= */
+
+async function addPendingTag(productRecord) {
+  const { error } = await db
+    .from("unprinted_tags")
+    .insert({
+      product_id: productRecord.id,
+      quantity: 1,
+      created_by: currentUser.id
+    });
+
+  if (error) throw error;
+
+  await loadPendingTags();
+
+  message(
+    "pendingStatus",
+    "Tag added to shared Un-Printed Tags!"
+  );
+}
+
+$("addBtn").onclick = async () => {
+  const data = requireCompleteProduct();
+  if (!data) return;
+
+  $("addBtn").disabled = true;
+  message("saveStatus", "Saving product and tag...");
+
+  try {
+    const productRecord =
+      await saveProductRecord(data);
+
+    await addPendingTag(productRecord);
+
+    message(
+      "saveStatus",
+      "Product saved and tag added to Un-Printed Tags!"
+    );
+
+    await loadRecentProducts();
+  } catch (error) {
+    message(
+      "saveStatus",
+      "Could not save tag: " + errorText(error)
+    );
+  } finally {
+    $("addBtn").disabled = false;
+  }
+};
+
+async function loadPendingTags() {
+  message("pendingStatus", "Loading unprinted tags...");
+
+  const { data, error } = await db
+    .from("unprinted_tags")
+    .select(
+      "id, product_id, quantity, created_at, products(id, upc, brand, product_name, organic, snap_eligible)"
+    )
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  if (error) {
+    message(
+      "pendingStatus",
+      "Could not load tags: " + errorText(error)
+    );
+    return;
+  }
+
+  pendingTags = data || [];
+
+  const currentIds = new Set(
+    pendingTags.map(item => item.id)
+  );
+
+  selectedPendingIds = new Set(
+    [...selectedPendingIds].filter(id =>
+      currentIds.has(id)
+    )
+  );
+
+  renderPendingTags();
+
+  message("pendingStatus", "");
+}
+
+function renderPendingTags() {
+  const list = $("pendingList");
+  list.replaceChildren();
+
+  const total = pendingTags.reduce(
+    (sum, item) => sum + item.quantity,
+    0
+  );
+
+  $("pendingCount").textContent = total;
+
+  if (!pendingTags.length) {
+    list.appendChild(
+      createText(
+        "note",
+        "No unprinted tags. You're all caught up!"
+      )
+    );
+    return;
+  }
+
+  pendingTags.forEach(item => {
+    const product = item.products;
+
+    if (!product) return;
+
+    const box = document.createElement("div");
+    box.className = "item";
+
+    const top = document.createElement("div");
+    top.className = "row";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked =
+      selectedPendingIds.has(item.id);
+
+    checkbox.onchange = () => {
+      if (checkbox.checked) {
+        selectedPendingIds.add(item.id);
+      } else {
+        selectedPendingIds.delete(item.id);
+      }
+    };
+
+    const title = createText(
+      "item-title grow",
+      product.brand + " — " + product.product_name
+    );
+
+    top.append(checkbox, title);
+
+    box.appendChild(top);
+
+    box.appendChild(
+      createText(
+        "item-details",
+        "UPC: " + product.upc +
+        " | Quantity: " + item.quantity
+      )
+    );
+
+    const actions = document.createElement("div");
+    actions.className = "item-actions";
+
+    actions.appendChild(
+      makeButton(
+        "Print",
+        "small",
+        () => printPending([item.id])
+      )
+    );
+
+    actions.appendChild(
+      makeButton(
+        "Qty −",
+        "small secondary",
+        () => changeQuantity(
+          item,
+          Math.max(1, item.quantity - 1)
+        )
+      )
+    );
+
+    actions.appendChild(
+      makeButton(
+        "Qty +",
+        "small secondary",
+        () => changeQuantity(
+          item,
+          Math.min(500, item.quantity + 1)
+        )
+      )
+    );
+
+    actions.appendChild(
+      makeButton(
+        "Mark Printed",
+        "small secondary",
+        () => markPrinted(item.id)
+      )
+    );
+
+    actions.appendChild(
+      makeButton(
+        "Delete",
+        "small danger",
+        () => deletePending(item.id)
+      )
+    );
+
+    box.appendChild(actions);
+    list.appendChild(box);
+  });
+}
+
+async function changeQuantity(item, quantity) {
+  if (quantity === item.quantity) return;
+
+  const { error } = await db
+    .from("unprinted_tags")
+    .update({ quantity })
+    .eq("id", item.id);
+
+  if (error) {
+    alert(errorText(error));
+    return;
+  }
+
+  await loadPendingTags();
+}
+
+async function removePending(id) {
+  const { error } = await db
+    .from("unprinted_tags")
+    .delete()
+    .eq("id", id);
+
+  if (error) throw error;
+
+  selectedPendingIds.delete(id);
+  await loadPendingTags();
+}
+
+async function deletePending(id) {
+  if (!confirm(
+    "Delete this unprinted tag?\n\n" +
+    "The saved product will NOT be deleted."
+  )) return;
+
+  try {
+    await removePending(id);
+  } catch (error) {
+    alert(errorText(error));
+  }
+}
+
+async function markPrinted(id) {
+  if (!confirm(
+    "Confirm this tag has been printed successfully?\n\n" +
+    "It will be removed from Un-Printed Tags.\n" +
+    "The product will remain saved."
+  )) return;
+
+  try {
+    await removePending(id);
+  } catch (error) {
+    alert(errorText(error));
+  }
+}
+
+$("refreshPendingBtn").onclick = loadPendingTags;
+
+$("printSelectedBtn").onclick = () => {
+  printPending([...selectedPendingIds]);
+};
+
+/* =========================================
+   PRINTING
+   ========================================= */
+
+function printPending(ids) {
+  if (!ids.length) {
+    alert("Select at least one tag to print.");
+    return;
+  }
+
+  const items = pendingTags.filter(
+    item => ids.includes(item.id)
+  );
+
   const sheet = $("sheet");
   sheet.replaceChildren();
 
-  for (let i = 0; i < queue.length; i += 14) {
+  const printData = [];
+
+  items.forEach(item => {
+    if (!item.products) return;
+
+    for (let i = 0; i < item.quantity; i++) {
+      printData.push(item.products);
+    }
+  });
+
+  if (!printData.length) {
+    alert("No printable tags found.");
+    return;
+  }
+
+  for (let i = 0; i < printData.length; i += 14) {
     const page = document.createElement("div");
     page.className = "print-page";
 
-    queue.slice(i, i + 14).forEach(data => {
-      page.appendChild(makeTag(data));
+    printData.slice(i, i + 14).forEach(product => {
+      page.appendChild(makeTag(product));
     });
 
     sheet.appendChild(page);
   }
 
-  $("count").textContent = queue.length;
-}
-
-$("clearBtn").onclick = () => {
-  if (confirm("Clear all tags from the print sheet?")) {
-    queue = [];
-    renderSheet();
-  }
-};
-
-$("printBtn").onclick = () => {
-  if (!queue.length) {
-    alert("Add a tag first.");
-    return;
-  }
+  printingIds = items.map(item => item.id);
 
   window.print();
-};
 
-/* CAMERA SCANNER */
+  message(
+    "pendingStatus",
+    "Print dialog opened. After printing, use Mark Printed to remove completed tags."
+  );
+}
+
+/* =========================================
+   CAMERA SCANNER
+   ========================================= */
 
 async function stopScanner() {
   if (scanner) {
-    try {
-      await scanner.stop();
-    } catch (e) {}
-
-    try {
-      scanner.clear();
-    } catch (e) {}
-
+    try { await scanner.stop(); } catch (e) {}
+    try { scanner.clear(); } catch (e) {}
     scanner = null;
   }
 
@@ -674,8 +1532,10 @@ $("scanBtn").onclick = async () => {
   if (scanning) return;
 
   if (!window.Html5Qrcode) {
-    $("status").textContent =
-      "Scanner library unavailable. Enter the UPC manually.";
+    message(
+      "status",
+      "Scanner unavailable. Enter UPC manually."
+    );
     return;
   }
 
@@ -687,13 +1547,10 @@ $("scanBtn").onclick = async () => {
     scanning = true;
 
     await scanner.start(
-      {facingMode: "environment"},
+      { facingMode: "environment" },
       {
         fps: 10,
-        qrbox: {
-          width: 250,
-          height: 120
-        }
+        qrbox: { width: 250, height: 120 }
       },
       async decodedText => {
         if (!scanning) return;
@@ -707,14 +1564,53 @@ $("scanBtn").onclick = async () => {
       () => {}
     );
   } catch (error) {
-    $("status").textContent =
-      "Camera unavailable. Check camera permissions.";
-
+    message(
+      "status",
+      "Camera unavailable. Check camera permissions."
+    );
     await stopScanner();
   }
 };
 
-updatePreview();
+/* =========================================
+   START APPLICATION
+   ========================================= */
+
+async function startApp() {
+  updatePreview();
+
+  if (
+    SUPABASE_KEY ===
+    "PASTE_YOUR_PUBLISHABLE_KEY_HERE"
+  ) {
+    showApp(false);
+    message(
+      "loginStatus",
+      "Setup needed: Add your Supabase publishable key to index.html."
+    );
+    $("loginBtn").disabled = true;
+    return;
+  }
+
+  if (!window.supabase) {
+    showApp(false);
+    message(
+      "loginStatus",
+      "Supabase library could not load. Check internet connection."
+    );
+    $("loginBtn").disabled = true;
+    return;
+  }
+
+  db = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_KEY
+  );
+
+  await loadSession();
+}
+
+startApp();
 </script>
 
 </body>
