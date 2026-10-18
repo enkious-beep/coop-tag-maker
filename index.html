@@ -11,20 +11,29 @@
 
 <style>
 * { box-sizing: border-box; }
+
 body {
   margin: 0;
   background: #f1f5f0;
   font-family: Arial, sans-serif;
   color: #173521;
 }
+
 header {
   background: #169a0c;
   color: white;
   padding: 20px;
   text-align: center;
 }
+
 header h1 { margin: 0 0 5px; }
-main { max-width: 750px; margin: auto; padding: 16px; }
+
+main {
+  max-width: 750px;
+  margin: auto;
+  padding: 16px;
+}
+
 .panel {
   background: white;
   border: 1px solid #d5dfd3;
@@ -32,8 +41,15 @@ main { max-width: 750px; margin: auto; padding: 16px; }
   padding: 18px;
   margin-bottom: 16px;
 }
+
 h2 { margin-top: 0; font-size: 19px; }
-label { display: block; margin: 12px 0 5px; font-weight: bold; }
+
+label {
+  display: block;
+  margin: 12px 0 5px;
+  font-weight: bold;
+}
+
 input[type=text] {
   width: 100%;
   padding: 12px;
@@ -41,6 +57,7 @@ input[type=text] {
   border-radius: 7px;
   font-size: 16px;
 }
+
 button {
   background: #169a0c;
   color: white;
@@ -52,23 +69,53 @@ button {
   margin: 7px 5px 5px 0;
   cursor: pointer;
 }
-button.secondary { background: #e3ece1; color: #174b20; }
-button:disabled { opacity: .5; cursor: not-allowed; }
-.note { color: #637267; font-size: 13px; }
+
+button.secondary {
+  background: #e3ece1;
+  color: #174b20;
+}
+
+button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.note {
+  color: #637267;
+  font-size: 13px;
+}
+
 .question {
   background: #f4f8f3;
   padding: 13px;
   border-radius: 8px;
   margin-top: 12px;
 }
-.question strong { display: block; margin-bottom: 10px; }
+
+.question strong {
+  display: block;
+  margin-bottom: 10px;
+}
+
 .question label {
   display: inline-block;
   margin: 0 20px 0 0;
   font-weight: normal;
 }
-#reader { width: 100%; max-width: 420px; margin: 10px auto; }
-#status { min-height: 20px; font-size: 14px; }
+
+#reader {
+  width: 100%;
+  max-width: 420px;
+  margin: 10px auto;
+}
+
+#status {
+  min-height: 20px;
+  font-size: 14px;
+}
+
+/* SHELF TAG */
+
 .tag {
   position: relative;
   width: 3.25in;
@@ -78,7 +125,9 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   color: black;
   overflow: hidden;
   font-family: Arial, sans-serif;
+  flex-shrink: 0;
 }
+
 .tag-header {
   height: .34in;
   padding: 5px 8px;
@@ -88,122 +137,215 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   font-size: 16px;
   white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
+
 .tag-name {
-  padding: 6px 8px;
+  padding: 5px 8px 0;
   font-size: 14px;
   font-weight: 500;
-  max-height: .38in;
+  line-height: 1.1;
+  max-height: .34in;
   overflow: hidden;
 }
+
 .tag-footer {
   position: absolute;
-  left: 9px;
-  right: 9px;
-  bottom: 5px;
+  left: 4px;
+  right: 5px;
+  bottom: 3px;
+  height: .42in;
   display: flex;
-  align-items: end;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 8px;
+  gap: 3px;
 }
-.tag-footer svg {
-  width: 1.75in;
-  height: .30in;
-  max-width: 70%;
+
+.tag-barcode {
+  width: 2.12in;
+  height: .39in;
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
 }
+
+.tag-barcode svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
 .tag-flags {
-  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  padding-bottom: 3px;
+}
+
+.tag-organic {
   color: #169a0c;
   font-size: 10px;
   font-weight: bold;
   white-space: nowrap;
 }
-#preview { margin: 15px 0; }
-#sheet { display: none; }
-@page { size: letter; margin: .35in; }
+
+.tag-snap {
+  display: block;
+  max-width: .83in;
+  max-height: .30in;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+#preview {
+  margin: 15px 0;
+}
+
+#sheet {
+  display: none;
+}
+
+@page {
+  size: letter;
+  margin: .35in;
+}
+
 @media print {
-  header, main { display: none !important; }
-  body { background: white; margin: 0; }
+  header, main {
+    display: none !important;
+  }
+
+  body {
+    background: white;
+    margin: 0;
+  }
+
   #sheet {
-    display: grid !important;
+    display: block !important;
+  }
+
+  .print-page {
+    display: grid;
     grid-template-columns: 3.25in 3.25in;
+    grid-template-rows: repeat(7, 1.25in);
     column-gap: .30in;
     row-gap: .10in;
-    align-content: start;
+    break-after: page;
+    page-break-after: always;
   }
-  #sheet .tag { break-inside: avoid; }
-  #sheet .tag:nth-child(14n+1):not(:first-child) {
-    break-before: page;
+
+  .print-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .tag {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .tag-header {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 }
 </style>
 </head>
 
 <body>
+
 <header>
   <h1>Co-op Tag Maker</h1>
   <div>Scan • Confirm • Print</div>
 </header>
 
 <main>
-  <section class="panel">
-    <h2>1. Scan Product</h2>
-    <button id="scanBtn">Scan Barcode</button>
-    <button class="secondary" id="stopBtn" style="display:none">Stop Camera</button>
-    <div id="reader" style="display:none"></div>
 
-    <label for="upc">Barcode / UPC</label>
-    <input id="upc" type="text" inputmode="numeric"
-           placeholder="Scan or enter barcode">
-    <button id="lookupBtn">Find Product</button>
-    <p id="status"></p>
-  </section>
+<section class="panel">
+  <h2>1. Scan Product</h2>
 
-  <section class="panel">
-    <h2>2. Confirm Product Information</h2>
+  <button id="scanBtn">Scan Barcode</button>
+  <button class="secondary" id="stopBtn" style="display:none">
+    Stop Camera
+  </button>
 
-    <label for="brand">Brand</label>
-    <input id="brand" type="text" placeholder="Kirkland">
+  <div id="reader" style="display:none"></div>
 
-    <label for="product">Product Name</label>
-    <input id="product" type="text" placeholder="Tomato Sauce">
+  <label for="upc">Barcode / UPC</label>
+  <input id="upc" type="text" inputmode="numeric"
+         placeholder="Scan or enter barcode">
 
-    <div class="question">
-      <strong>Is this Organic?</strong>
-      <label><input type="radio" name="organic" value="yes"> Yes</label>
-      <label><input type="radio" name="organic" value="no"> No</label>
-    </div>
+  <button id="lookupBtn">Find Product</button>
+  <p id="status"></p>
+</section>
 
-    <div class="question">
-      <strong>Is this SNAP eligible?</strong>
-      <label><input type="radio" name="snap" value="yes"> Yes</label>
-      <label><input type="radio" name="snap" value="no"> No</label>
-    </div>
+<section class="panel">
+  <h2>2. Confirm Product Information</h2>
 
-    <p class="note">
-      Verify both answers before creating a tag.
-      Product lookup does not determine SNAP eligibility.
-    </p>
+  <label for="brand">Brand</label>
+  <input id="brand" type="text" placeholder="Kirkland">
 
-    <h2>Tag Preview</h2>
-    <div id="preview" class="tag"></div>
+  <label for="product">Product Name</label>
+  <input id="product" type="text" placeholder="Tomato Sauce">
 
-    <button id="addBtn">Add Tag to Sheet</button>
-  </section>
+  <div class="question">
+    <strong>Is this Organic?</strong>
+    <label>
+      <input type="radio" name="organic" value="yes"> Yes
+    </label>
+    <label>
+      <input type="radio" name="organic" value="no"> No
+    </label>
+  </div>
 
-  <section class="panel">
-    <h2>3. Print Tags</h2>
-    <p><strong id="count">0</strong> tags in the print queue.</p>
-    <p class="note">14 tags per letter-size sheet.</p>
+  <div class="question">
+    <strong>Is this SNAP eligible?</strong>
+    <label>
+      <input type="radio" name="snap" value="yes"> Yes
+    </label>
+    <label>
+      <input type="radio" name="snap" value="no"> No
+    </label>
+  </div>
 
-    <button id="printBtn">Print / Save as PDF</button>
-    <button class="secondary" id="clearBtn">Clear Sheet</button>
-    <p class="note">
-      Use your phone's print menu to save a PDF or choose
-      a compatible printer. Employee accounts and shared
-      storage will be added in a later version.
-    </p>
-  </section>
+  <p class="note">
+    Verify both answers before creating a tag.
+    Product lookup does not determine SNAP eligibility.
+  </p>
+
+  <h2>Tag Preview</h2>
+  <div id="preview" class="tag"></div>
+
+  <button id="addBtn">Add Tag to Sheet</button>
+</section>
+
+<section class="panel">
+  <h2>3. Print Tags</h2>
+
+  <p>
+    <strong id="count">0</strong> tags in the print queue.
+  </p>
+
+  <p class="note">
+    14 tags per letter-size sheet.
+  </p>
+
+  <button id="printBtn">Print / Save as PDF</button>
+  <button class="secondary" id="clearBtn">Clear Sheet</button>
+
+  <p class="note">
+    Use your phone's print menu to save a PDF or choose
+    a compatible printer. Employee accounts and shared
+    storage will be added in a later version.
+  </p>
+</section>
+
 </main>
 
 <div id="sheet"></div>
@@ -216,11 +358,15 @@ let scanner = null;
 let scanning = false;
 
 function selected(name) {
-  return document.querySelector(`input[name="${name}"]:checked`)?.value || "";
+  return document.querySelector(
+    `input[name="${name}"]:checked`
+  )?.value || "";
 }
 
 function resetQuestions() {
-  document.querySelectorAll('input[type="radio"]').forEach(r => {
+  document.querySelectorAll(
+    'input[type="radio"]'
+  ).forEach(r => {
     r.checked = false;
   });
 }
@@ -250,18 +396,34 @@ function makeTag(data) {
   const footer = document.createElement("div");
   footer.className = "tag-footer";
 
+  const barcodeBox = document.createElement("div");
+  barcodeBox.className = "tag-barcode";
+
   const barcode = document.createElementNS(
     "http://www.w3.org/2000/svg", "svg"
   );
 
+  barcodeBox.appendChild(barcode);
+
   const flags = document.createElement("div");
   flags.className = "tag-flags";
-  flags.textContent = [
-    data.organic ? "ORGANIC" : "",
-    data.snap ? "SNAP" : ""
-  ].filter(Boolean).join(" • ");
 
-  footer.append(barcode, flags);
+  if (data.organic) {
+    const organic = document.createElement("div");
+    organic.className = "tag-organic";
+    organic.textContent = "ORGANIC";
+    flags.appendChild(organic);
+  }
+
+  if (data.snap) {
+    const snap = document.createElement("img");
+    snap.className = "tag-snap";
+    snap.src = "snap-logo-Color.jpg";
+    snap.alt = "SNAP";
+    flags.appendChild(snap);
+  }
+
+  footer.append(barcodeBox, flags);
   tag.append(header, name, footer);
 
   if (data.upc && window.JsBarcode) {
@@ -269,35 +431,45 @@ function makeTag(data) {
       JsBarcode(barcode, data.upc, {
         format: "CODE128",
         displayValue: false,
-        margin: 8,
-        width: 1.4,
-        height: 32
+        margin: 6,
+        width: 1.6,
+        height: 36
       });
     } catch (e) {
-      console.warn("Barcode could not be generated", e);
+      console.warn(
+        "Barcode could not be generated", e
+      );
     }
   }
+
   return tag;
 }
 
 function updatePreview() {
   $("preview").replaceWith(
-    Object.assign(makeTag(getProduct()), {id:"preview"})
+    Object.assign(
+      makeTag(getProduct()),
+      {id: "preview"}
+    )
   );
 }
 
-["upc","brand","product"].forEach(id => {
+["upc", "brand", "product"].forEach(id => {
   $(id).addEventListener("input", updatePreview);
 });
 
-document.querySelectorAll('input[type="radio"]').forEach(r => {
+document.querySelectorAll(
+  'input[type="radio"]'
+).forEach(r => {
   r.addEventListener("change", updatePreview);
 });
 
 async function lookup() {
   const upc = $("upc").value.trim();
+
   if (!upc) {
-    $("status").textContent = "Scan or enter a barcode first.";
+    $("status").textContent =
+      "Scan or enter a barcode first.";
     return;
   }
 
@@ -305,6 +477,7 @@ async function lookup() {
   $("brand").value = "";
   $("product").value = "";
   $("status").textContent = "Looking up product...";
+  updatePreview();
 
   try {
     const url =
@@ -313,28 +486,46 @@ async function lookup() {
       ".json?fields=product_name,product_name_en,brands,brand_owner";
 
     const response = await fetch(url);
-    if (!response.ok) throw new Error("Lookup failed");
+
+    if (!response.ok) {
+      throw new Error("Lookup failed");
+    }
 
     const data = await response.json();
 
     if (data.status === 1 && data.product) {
-      $("brand").value = (
-  data.product.brands ||
-  data.product.brand_owner ||
-  ""
-).split(",")[0].trim();
+      const item = data.product;
 
-$("product").value =
-  data.product.product_name_en ||
-  data.product.product_name ||
-  "";
-      $("status").textContent =
-        "Product found! Verify its name and answer both questions.";
+      const brand = String(
+        item.brands || item.brand_owner || ""
+      ).split(",")[0].trim();
+
+      const productName = String(
+        item.product_name_en ||
+        item.product_name ||
+        ""
+      ).trim();
+
+      $("brand").value = brand;
+      $("product").value = productName;
+
+      if (brand && productName) {
+        $("status").textContent =
+          "Product found! Brand and name filled in. Please verify.";
+      } else if (brand || productName) {
+        $("status").textContent =
+          "Partial product information found. Fill in missing fields.";
+      } else {
+        $("status").textContent =
+          "Product record found, but brand and name are missing. Enter manually.";
+      }
     } else {
       $("status").textContent =
         "Product not found. Enter the brand and name manually.";
     }
   } catch (error) {
+    console.error("Product lookup error:", error);
+
     $("status").textContent =
       "Lookup unavailable. Enter product details manually.";
   }
@@ -348,23 +539,41 @@ $("addBtn").onclick = () => {
   const data = getProduct();
 
   if (!data.upc || !data.brand || !data.product) {
-    alert("Please enter the barcode, brand and product name.");
+    alert(
+      "Please enter the barcode, brand and product name."
+    );
     return;
   }
 
   if (!selected("organic") || !selected("snap")) {
-    alert("Please answer BOTH Organic and SNAP questions.");
+    alert(
+      "Please answer BOTH Organic and SNAP questions."
+    );
     return;
   }
 
   queue.push(data);
   renderSheet();
-  $("status").textContent = "Tag added to sheet!";
+
+  $("status").textContent =
+    "Tag added to sheet!";
 };
 
 function renderSheet() {
-  $("sheet").replaceChildren();
-  queue.forEach(data => $("sheet").appendChild(makeTag(data)));
+  const sheet = $("sheet");
+  sheet.replaceChildren();
+
+  for (let i = 0; i < queue.length; i += 14) {
+    const page = document.createElement("div");
+    page.className = "print-page";
+
+    queue.slice(i, i + 14).forEach(data => {
+      page.appendChild(makeTag(data));
+    });
+
+    sheet.appendChild(page);
+  }
+
   $("count").textContent = queue.length;
 }
 
@@ -380,15 +589,23 @@ $("printBtn").onclick = () => {
     alert("Add a tag first.");
     return;
   }
+
   window.print();
 };
 
 async function stopScanner() {
   if (scanner) {
-    try { await scanner.stop(); } catch(e) {}
-    try { scanner.clear(); } catch(e) {}
+    try {
+      await scanner.stop();
+    } catch (e) {}
+
+    try {
+      scanner.clear();
+    } catch (e) {}
+
     scanner = null;
   }
+
   scanning = false;
   $("reader").style.display = "none";
   $("stopBtn").style.display = "none";
@@ -413,12 +630,14 @@ $("scanBtn").onclick = async () => {
     scanning = true;
 
     await scanner.start(
-      {facingMode:"environment"},
-      {fps:10, qrbox:{width:250,height:120}},
+      {facingMode: "environment"},
+      {fps: 10, qrbox: {width: 250, height: 120}},
       async decodedText => {
         if (!scanning) return;
+
         scanning = false;
         $("upc").value = decodedText;
+
         await stopScanner();
         await lookup();
       },
@@ -433,5 +652,6 @@ $("scanBtn").onclick = async () => {
 
 updatePreview();
 </script>
+
 </body>
 </html>
