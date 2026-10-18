@@ -310,7 +310,7 @@ async function lookup() {
     const url =
       "https://world.openfoodfacts.org/api/v2/product/" +
       encodeURIComponent(upc) +
-      ".json?fields=product_name,brands";
+      ".json?fields=product_name,product_name_en,brands,brand_owner";
 
     const response = await fetch(url);
     if (!response.ok) throw new Error("Lookup failed");
@@ -318,8 +318,16 @@ async function lookup() {
     const data = await response.json();
 
     if (data.status === 1 && data.product) {
-      $("brand").value = (data.product.brands || "").split(",")[0].trim();
-      $("product").value = data.product.product_name || "";
+      $("brand").value = (
+  data.product.brands ||
+  data.product.brand_owner ||
+  ""
+).split(",")[0].trim();
+
+$("product").value =
+  data.product.product_name_en ||
+  data.product.product_name ||
+  "";
       $("status").textContent =
         "Product found! Verify its name and answer both questions.";
     } else {
