@@ -1,0 +1,429 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Co-op Tag Maker</title>
+
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: #f1f5f0;
+  font-family: Arial, sans-serif;
+  color: #173521;
+}
+header {
+  background: #169a0c;
+  color: white;
+  padding: 20px;
+  text-align: center;
+}
+header h1 { margin: 0 0 5px; }
+main { max-width: 750px; margin: auto; padding: 16px; }
+.panel {
+  background: white;
+  border: 1px solid #d5dfd3;
+  border-radius: 12px;
+  padding: 18px;
+  margin-bottom: 16px;
+}
+h2 { margin-top: 0; font-size: 19px; }
+label { display: block; margin: 12px 0 5px; font-weight: bold; }
+input[type=text] {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #a6b9a3;
+  border-radius: 7px;
+  font-size: 16px;
+}
+button {
+  background: #169a0c;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 17px;
+  font-size: 15px;
+  font-weight: bold;
+  margin: 7px 5px 5px 0;
+  cursor: pointer;
+}
+button.secondary { background: #e3ece1; color: #174b20; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+.note { color: #637267; font-size: 13px; }
+.question {
+  background: #f4f8f3;
+  padding: 13px;
+  border-radius: 8px;
+  margin-top: 12px;
+}
+.question strong { display: block; margin-bottom: 10px; }
+.question label {
+  display: inline-block;
+  margin: 0 20px 0 0;
+  font-weight: normal;
+}
+#reader { width: 100%; max-width: 420px; margin: 10px auto; }
+#status { min-height: 20px; font-size: 14px; }
+.tag {
+  position: relative;
+  width: 3.25in;
+  height: 1.25in;
+  border: 1px solid #222;
+  background: white;
+  color: black;
+  overflow: hidden;
+  font-family: Arial, sans-serif;
+}
+.tag-header {
+  height: .34in;
+  padding: 5px 8px;
+  background: #169a0c;
+  color: white;
+  font-weight: bold;
+  font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.tag-name {
+  padding: 6px 8px;
+  font-size: 14px;
+  font-weight: 500;
+  max-height: .38in;
+  overflow: hidden;
+}
+.tag-footer {
+  position: absolute;
+  left: 9px;
+  right: 9px;
+  bottom: 5px;
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 8px;
+}
+.tag-footer svg {
+  width: 1.75in;
+  height: .30in;
+  max-width: 70%;
+}
+.tag-flags {
+  text-align: right;
+  color: #169a0c;
+  font-size: 10px;
+  font-weight: bold;
+  white-space: nowrap;
+}
+#preview { margin: 15px 0; }
+#sheet { display: none; }
+@page { size: letter; margin: .35in; }
+@media print {
+  header, main { display: none !important; }
+  body { background: white; margin: 0; }
+  #sheet {
+    display: grid !important;
+    grid-template-columns: 3.25in 3.25in;
+    column-gap: .30in;
+    row-gap: .10in;
+    align-content: start;
+  }
+  #sheet .tag { break-inside: avoid; }
+  #sheet .tag:nth-child(14n+1):not(:first-child) {
+    break-before: page;
+  }
+}
+</style>
+</head>
+
+<body>
+<header>
+  <h1>Co-op Tag Maker</h1>
+  <div>Scan • Confirm • Print</div>
+</header>
+
+<main>
+  <section class="panel">
+    <h2>1. Scan Product</h2>
+    <button id="scanBtn">Scan Barcode</button>
+    <button class="secondary" id="stopBtn" style="display:none">Stop Camera</button>
+    <div id="reader" style="display:none"></div>
+
+    <label for="upc">Barcode / UPC</label>
+    <input id="upc" type="text" inputmode="numeric"
+           placeholder="Scan or enter barcode">
+    <button id="lookupBtn">Find Product</button>
+    <p id="status"></p>
+  </section>
+
+  <section class="panel">
+    <h2>2. Confirm Product Information</h2>
+
+    <label for="brand">Brand</label>
+    <input id="brand" type="text" placeholder="Kirkland">
+
+    <label for="product">Product Name</label>
+    <input id="product" type="text" placeholder="Tomato Sauce">
+
+    <div class="question">
+      <strong>Is this Organic?</strong>
+      <label><input type="radio" name="organic" value="yes"> Yes</label>
+      <label><input type="radio" name="organic" value="no"> No</label>
+    </div>
+
+    <div class="question">
+      <strong>Is this SNAP eligible?</strong>
+      <label><input type="radio" name="snap" value="yes"> Yes</label>
+      <label><input type="radio" name="snap" value="no"> No</label>
+    </div>
+
+    <p class="note">
+      Verify both answers before creating a tag.
+      Product lookup does not determine SNAP eligibility.
+    </p>
+
+    <h2>Tag Preview</h2>
+    <div id="preview" class="tag"></div>
+
+    <button id="addBtn">Add Tag to Sheet</button>
+  </section>
+
+  <section class="panel">
+    <h2>3. Print Tags</h2>
+    <p><strong id="count">0</strong> tags in the print queue.</p>
+    <p class="note">14 tags per letter-size sheet.</p>
+
+    <button id="printBtn">Print / Save as PDF</button>
+    <button class="secondary" id="clearBtn">Clear Sheet</button>
+    <p class="note">
+      Use your phone's print menu to save a PDF or choose
+      a compatible printer. Employee accounts and shared
+      storage will be added in a later version.
+    </p>
+  </section>
+</main>
+
+<div id="sheet"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+let queue = [];
+let scanner = null;
+let scanning = false;
+
+function selected(name) {
+  return document.querySelector(`input[name="${name}"]:checked`)?.value || "";
+}
+
+function resetQuestions() {
+  document.querySelectorAll('input[type="radio"]').forEach(r => {
+    r.checked = false;
+  });
+}
+
+function getProduct() {
+  return {
+    upc: $("upc").value.trim(),
+    brand: $("brand").value.trim(),
+    product: $("product").value.trim(),
+    organic: selected("organic") === "yes",
+    snap: selected("snap") === "yes"
+  };
+}
+
+function makeTag(data) {
+  const tag = document.createElement("div");
+  tag.className = "tag";
+
+  const header = document.createElement("div");
+  header.className = "tag-header";
+  header.textContent = data.brand || "Brand";
+
+  const name = document.createElement("div");
+  name.className = "tag-name";
+  name.textContent = data.product || "Product name";
+
+  const footer = document.createElement("div");
+  footer.className = "tag-footer";
+
+  const barcode = document.createElementNS(
+    "http://www.w3.org/2000/svg", "svg"
+  );
+
+  const flags = document.createElement("div");
+  flags.className = "tag-flags";
+  flags.textContent = [
+    data.organic ? "ORGANIC" : "",
+    data.snap ? "SNAP" : ""
+  ].filter(Boolean).join(" • ");
+
+  footer.append(barcode, flags);
+  tag.append(header, name, footer);
+
+  if (data.upc && window.JsBarcode) {
+    try {
+      JsBarcode(barcode, data.upc, {
+        format: "CODE128",
+        displayValue: false,
+        margin: 8,
+        width: 1.4,
+        height: 32
+      });
+    } catch (e) {
+      console.warn("Barcode could not be generated", e);
+    }
+  }
+  return tag;
+}
+
+function updatePreview() {
+  $("preview").replaceWith(
+    Object.assign(makeTag(getProduct()), {id:"preview"})
+  );
+}
+
+["upc","brand","product"].forEach(id => {
+  $(id).addEventListener("input", updatePreview);
+});
+
+document.querySelectorAll('input[type="radio"]').forEach(r => {
+  r.addEventListener("change", updatePreview);
+});
+
+async function lookup() {
+  const upc = $("upc").value.trim();
+  if (!upc) {
+    $("status").textContent = "Scan or enter a barcode first.";
+    return;
+  }
+
+  resetQuestions();
+  $("brand").value = "";
+  $("product").value = "";
+  $("status").textContent = "Looking up product...";
+
+  try {
+    const url =
+      "https://world.openfoodfacts.org/api/v2/product/" +
+      encodeURIComponent(upc) +
+      ".json?fields=product_name,brands";
+
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Lookup failed");
+
+    const data = await response.json();
+
+    if (data.status === 1 && data.product) {
+      $("brand").value = (data.product.brands || "").split(",")[0].trim();
+      $("product").value = data.product.product_name || "";
+      $("status").textContent =
+        "Product found! Verify its name and answer both questions.";
+    } else {
+      $("status").textContent =
+        "Product not found. Enter the brand and name manually.";
+    }
+  } catch (error) {
+    $("status").textContent =
+      "Lookup unavailable. Enter product details manually.";
+  }
+
+  updatePreview();
+}
+
+$("lookupBtn").onclick = lookup;
+
+$("addBtn").onclick = () => {
+  const data = getProduct();
+
+  if (!data.upc || !data.brand || !data.product) {
+    alert("Please enter the barcode, brand and product name.");
+    return;
+  }
+
+  if (!selected("organic") || !selected("snap")) {
+    alert("Please answer BOTH Organic and SNAP questions.");
+    return;
+  }
+
+  queue.push(data);
+  renderSheet();
+  $("status").textContent = "Tag added to sheet!";
+};
+
+function renderSheet() {
+  $("sheet").replaceChildren();
+  queue.forEach(data => $("sheet").appendChild(makeTag(data)));
+  $("count").textContent = queue.length;
+}
+
+$("clearBtn").onclick = () => {
+  if (confirm("Clear all tags from the print sheet?")) {
+    queue = [];
+    renderSheet();
+  }
+};
+
+$("printBtn").onclick = () => {
+  if (!queue.length) {
+    alert("Add a tag first.");
+    return;
+  }
+  window.print();
+};
+
+async function stopScanner() {
+  if (scanner) {
+    try { await scanner.stop(); } catch(e) {}
+    try { scanner.clear(); } catch(e) {}
+    scanner = null;
+  }
+  scanning = false;
+  $("reader").style.display = "none";
+  $("stopBtn").style.display = "none";
+}
+
+$("stopBtn").onclick = stopScanner;
+
+$("scanBtn").onclick = async () => {
+  if (scanning) return;
+
+  if (!window.Html5Qrcode) {
+    $("status").textContent =
+      "Scanner library unavailable. Enter the UPC manually.";
+    return;
+  }
+
+  try {
+    $("reader").style.display = "block";
+    $("stopBtn").style.display = "inline-block";
+
+    scanner = new Html5Qrcode("reader");
+    scanning = true;
+
+    await scanner.start(
+      {facingMode:"environment"},
+      {fps:10, qrbox:{width:250,height:120}},
+      async decodedText => {
+        if (!scanning) return;
+        scanning = false;
+        $("upc").value = decodedText;
+        await stopScanner();
+        await lookup();
+      },
+      () => {}
+    );
+  } catch (error) {
+    $("status").textContent =
+      "Camera unavailable. Check camera permissions.";
+    await stopScanner();
+  }
+};
+
+updatePreview();
+</script>
+</body>
+</html>
