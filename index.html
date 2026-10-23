@@ -694,7 +694,7 @@ function makeTag(data) {
     "http://www.w3.org/2000/svg", "svg"
   );
 
-  barcode.setAttribute("preserveAspectRatio", "xMinYMax meet");
+  barcode.setAttribute("preserveAspectRatio", "none");
   barcodeBox.appendChild(barcode);
 
   const flags = document.createElement("div");
@@ -732,7 +732,7 @@ function makeTag(data) {
       format,
       displayValue: false,
       margin: 12,      // Keep clear white margins around the bars
-      width: 1.85,    // Slightly wider barcode modules
+      width: 2.15,    // Wider barcode modules; SVG fills the allotted horizontal space
       height: 27,     // Shorter barcode leaves handwriting space above
       lineColor: "#000",
       background: "#fff"
