@@ -237,8 +237,8 @@ button:disabled {
   position: absolute;
   left: 2px;
   right: 5px;
-  bottom: 3px;
-  height: .43in;
+  bottom: 1px;
+  height: .32in;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
@@ -246,8 +246,8 @@ button:disabled {
 }
 
 .tag-barcode {
-  width: 2.06in;
-  height: .38in;
+  width: 2.22in;
+  height: .29in;
   flex-shrink: 0;
   display: flex;
   align-items: flex-end;
@@ -272,7 +272,7 @@ button:disabled {
 
 .tag-snap {
   display: block;
-  max-width: .70in;
+  max-width: .60in;
   max-height: .25in;
   width: auto;
   height: auto;
@@ -694,6 +694,7 @@ function makeTag(data) {
     "http://www.w3.org/2000/svg", "svg"
   );
 
+  barcode.setAttribute("preserveAspectRatio", "xMinYMax meet");
   barcodeBox.appendChild(barcode);
 
   const flags = document.createElement("div");
@@ -730,9 +731,9 @@ function makeTag(data) {
     const options = {
       format,
       displayValue: false,
-      margin: 9,       // White quiet zones on both ends
-      width: 1.6,     // Wider individual bars for the store scanner
-      height: 34,
+      margin: 12,      // Keep clear white margins around the bars
+      width: 1.85,    // Slightly wider barcode modules
+      height: 27,     // Shorter barcode leaves handwriting space above
       lineColor: "#000",
       background: "#fff"
     };
