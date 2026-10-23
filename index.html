@@ -192,7 +192,7 @@ button:disabled {
 
 .tag {
   position: relative;
-  width: 3.25in;
+  width: 3.00in;
   height: 1.25in;
   border: 1px solid #222;
   background: white;
@@ -238,7 +238,7 @@ button:disabled {
   left: 2px;
   right: 5px;
   bottom: 3px;
-  height: .39in;
+  height: .43in;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
@@ -246,8 +246,8 @@ button:disabled {
 }
 
 .tag-barcode {
-  width: 1.55in;
-  height: .29in;
+  width: 2.06in;
+  height: .38in;
   flex-shrink: 0;
   display: flex;
   align-items: flex-end;
@@ -272,8 +272,8 @@ button:disabled {
 
 .tag-snap {
   display: block;
-  max-width: .83in;
-  max-height: .26in;
+  max-width: .70in;
+  max-height: .25in;
   width: auto;
   height: auto;
   object-fit: contain;
@@ -303,7 +303,7 @@ button:disabled {
 
   .print-page {
     display: grid;
-    grid-template-columns: 3.25in 3.25in;
+    grid-template-columns: 3.00in 3.00in;
     grid-template-rows: repeat(7, 1.25in);
     column-gap: .30in;
     row-gap: .10in;
@@ -718,16 +718,34 @@ function makeTag(data) {
   tag.append(header, name, dollar, footer);
 
   if (data.upc && window.JsBarcode) {
+    const value = String(data.upc).trim();
+    const digitsOnly = /^\d+$/.test(value);
+    // Use the same retail symbology found on most product packages.
+    // JsBarcode validates UPC/EAN check digits; invalid numbers fall back
+    // to Code 128 rather than producing an incorrect retail barcode.
+    const format = digitsOnly && value.length === 12 ? "UPC" :
+                   digitsOnly && value.length === 13 ? "EAN13" :
+                   digitsOnly && value.length === 8 ? "EAN8" : "CODE128";
+
+    const options = {
+      format,
+      displayValue: false,
+      margin: 9,       // White quiet zones on both ends
+      width: 1.6,     // Wider individual bars for the store scanner
+      height: 34,
+      lineColor: "#000",
+      background: "#fff"
+    };
+
     try {
-      JsBarcode(barcode, data.upc, {
-        format: "CODE128",
-        displayValue: false,
-        margin: 8,
-        width: 1.4,
-        height: 32
-      });
+      JsBarcode(barcode, value, options);
     } catch (e) {
-      console.warn("Barcode generation failed:", e);
+      console.warn("UPC/EAN could not be encoded; using Code 128:", e);
+      try {
+        JsBarcode(barcode, value, { ...options, format: "CODE128" });
+      } catch (fallbackError) {
+        console.warn("Barcode generation failed:", fallbackError);
+      }
     }
   }
 
