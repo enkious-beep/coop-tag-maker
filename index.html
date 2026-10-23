@@ -279,6 +279,14 @@ button:disabled {
   object-fit: contain;
 }
 
+/* Text-only Non-GMO badge; not a third-party certification logo. */
+.tag-nongmo {
+  color: #169a0c;
+  font-size: 9px;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
 .tag-organic {
   color: #169a0c;
   font-size: 10px;
@@ -483,9 +491,15 @@ button:disabled {
     </label>
   </div>
 
+  <div class="question">
+    <strong>Is this Non-GMO?</strong>
+    <label><input type="radio" name="nongmo" value="yes"> Yes</label>
+    <label><input type="radio" name="nongmo" value="no"> No</label>
+  </div>
+
   <p class="note">
-    Verify Organic and SNAP eligibility manually.
-    Product lookup does not determine SNAP eligibility.
+    Verify Organic, SNAP, and Non-GMO claims manually.
+    Product lookup does not determine these claims.
   </p>
 
   <h3>Tag Preview</h3>
@@ -633,7 +647,8 @@ function getProduct() {
     brand: $("brand").value.trim(),
     product: $("product").value.trim(),
     organic: selected("organic") === "yes",
-    snap: selected("snap") === "yes"
+    snap: selected("snap") === "yes",
+    nongmo: selected("nongmo") === "yes"
   };
 }
 
@@ -645,8 +660,8 @@ function requireCompleteProduct() {
     return null;
   }
 
-  if (!selected("organic") || !selected("snap")) {
-    alert("Answer BOTH Organic and SNAP questions.");
+  if (!selected("organic") || !selected("snap") || !selected("nongmo")) {
+    alert("Answer Organic, SNAP, and Non-GMO questions.");
     return null;
   }
 
@@ -706,6 +721,13 @@ function makeTag(data) {
     snap.src = "snap-logo-Color.jpg";
     snap.alt = "SNAP";
     flags.appendChild(snap);
+  }
+
+  if (data.nongmo || data.non_gmo) {
+    const nongmo = document.createElement("div");
+    nongmo.className = "tag-nongmo";
+    nongmo.textContent = "NON-GMO";
+    flags.appendChild(nongmo);
   }
 
   if (data.organic) {
@@ -904,6 +926,7 @@ function fillProduct(item) {
   resetQuestions();
   setQuestion("organic", !!item.organic);
   setQuestion("snap", !!item.snap_eligible);
+  setQuestion("nongmo", !!item.non_gmo);
 
   updatePreview();
   updateProductActions();
@@ -1039,6 +1062,7 @@ async function saveProductRecord(data) {
     product_name: data.product,
     organic: data.organic,
     snap_eligible: data.snap,
+    non_gmo: data.nongmo,
     updated_at: new Date().toISOString()
   };
 
@@ -1089,7 +1113,8 @@ $("saveChangesBtn").onclick = async () => {
   try {
     const { data: updated, error } = await db.from("products")
       .update({ brand: data.brand, product_name: data.product, organic: data.organic,
-        snap_eligible: data.snap, updated_at: new Date().toISOString() })
+        snap_eligible: data.snap, non_gmo: data.nongmo,
+        updated_at: new Date().toISOString() })
       .eq("id", loadedSavedProduct.id).select().single();
     if (error) throw error;
     loadedSavedProduct = updated;
@@ -1132,7 +1157,8 @@ function makeProductItem(item) {
       "item-details",
       "UPC: " + item.upc +
       " | Organic: " + (item.organic ? "Yes" : "No") +
-      " | SNAP: " + (item.snap_eligible ? "Yes" : "No")
+      " | SNAP: " + (item.snap_eligible ? "Yes" : "No") +
+      " | Non-GMO: " + (item.non_gmo ? "Yes" : "No")
     )
   );
 
@@ -1350,7 +1376,7 @@ async function loadPendingTags() {
     const pageSize = 500;
     for (let offset = 0; ; offset += pageSize) {
       const { data, error } = await db.from("unprinted_tags")
-        .select("id, product_id, quantity, created_at, products(id, upc, brand, product_name, organic, snap_eligible)")
+        .select("id, product_id, quantity, created_at, products(id, upc, brand, product_name, organic, snap_eligible, non_gmo)")
         .order("created_at", { ascending: false })
         .range(offset, offset + pageSize - 1);
       if (error) throw error;
