@@ -584,7 +584,7 @@ button:disabled {
 
 <section class="panel" id="marketTagsPanel">
   <h2>5. Produce &amp; Mobile Market Tags</h2>
-  <p class="note">Large 3.4 × 2.2 inch tags, with a blank white bottom for dry-erase prices. No barcode. These are printed separately from the shared barcode-tag queue.</p>
+  <p class="note">Large 3.4 × 2.2 inch tags, with a blank white bottom for dry-erase prices. No barcode. These are printed separately from the shared barcode-tag queue. Your print list is automatically saved on this device, even after refreshing. It is not shared across employees or devices.</p>
   <label for="marketTagType">Tag type</label>
   <select id="marketTagType"><option value="store">In-store Produce — green</option><option value="mobile">Mobile Market — mint green</option></select>
   <div id="marketLogoRow" style="display:none">
@@ -2009,7 +2009,23 @@ async function startWithAuthentication() {
 
 
 /* NEW: local produce/mobile tag builder. No database/schema changes. */
-const marketQueue = [];
+/* Save the produce/mobile print queue on this device between refreshes. */
+const MARKET_QUEUE_STORAGE_KEY = "coop_market_tags_queue_v1";
+function loadMarketQueue() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(MARKET_QUEUE_STORAGE_KEY) || "[]");
+    if (!Array.isArray(saved)) return [];
+    return saved.filter(item => item && typeof item.name === "string" &&
+      (item.type === "store" || item.type === "mobile") &&
+      (item.logo === "rx" || item.logo === "bus") && item.name.trim())
+      .map(item => ({ type:item.type, logo:item.logo, name:item.name.slice(0,90) }));
+  } catch (error) { console.warn("Could not restore saved tag list:", error); return []; }
+}
+const marketQueue = loadMarketQueue();
+function saveMarketQueue() {
+  try { localStorage.setItem(MARKET_QUEUE_STORAGE_KEY, JSON.stringify(marketQueue)); }
+  catch (error) { console.warn("Could not save tag list:", error); }
+}
 function makeMarketTag(item) {
   const tag = document.createElement("div");
   tag.className = "market-tag" + (item.type === "mobile" ? " mobile" : "");
@@ -2035,6 +2051,7 @@ function updateMarketPreview() {
   $("marketPreview").replaceChildren(makeMarketTag(marketFormValue()));
 }
 function renderMarketQueue() {
+  saveMarketQueue();
   const target = $("marketQueue"); target.replaceChildren();
   marketQueue.forEach((item,index) => {
     const row = document.createElement("div"); row.className = "market-queue-entry";
