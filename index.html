@@ -338,6 +338,7 @@ button:disabled {
 .market-tag { width:3.4in; height:2.2in; border:1px solid #385b51; border-radius:0; overflow:hidden; background:white; color:#142d26; flex-shrink:0; font-family:Arial,sans-serif; }
 .market-tag-top { height:1.12in; background:#a9b99b; display:flex; align-items:center; justify-content:space-between; gap:4px; padding:3px 6px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
 .market-tag.mobile .market-tag-top { background:#ccece3; }
+.market-tag.mobile.peach .market-tag-top { background:#f4b789; }
 .market-tag-name { flex:1; min-width:0; font-size:32px; font-weight:900; line-height:1.02; overflow-wrap:normal; word-break:normal; text-transform:uppercase; letter-spacing:-.7px; }
 .market-tag-name.long { font-size:25px; }
 .market-tag-name.very-long { font-size:19px; }
@@ -586,11 +587,12 @@ button:disabled {
   <h2>5. Produce &amp; Mobile Market Tags</h2>
   <p class="note">Large 3.4 × 2.2 inch tags, with a blank white bottom for dry-erase prices. No barcode. These are printed separately from the shared barcode-tag queue. Your print list is shared securely with active Co-op employees through Supabase. Printed tags can be marked completed.</p>
   <label for="marketTagType">Tag type</label>
-  <select id="marketTagType"><option value="store">In-store Produce — green</option><option value="mobile">Mobile Market — mint green</option></select>
-  <div id="marketLogoRow" style="display:none">
-    <label for="marketLogo">Mobile Market logo</label>
-    <select id="marketLogo"><option value="rx">Cochise Produce Rx</option><option value="bus">Mobile Market Bus</option></select>
-  </div>
+  <select id="marketTagType">
+    <option value="store">In-store Produce — green (Local Co-op)</option>
+    <option value="mobile-peach">Mobile Market — peach orange (Local Co-op)</option>
+    <option value="mobile-bus">Veggie Bucks — mint green (Bus)</option>
+    <option value="mobile-rx">Cochise Produce RX — mint green (RX)</option>
+  </select>
   <div style="border:1px solid #d5e2d4;border-radius:9px;padding:12px;margin:12px 0;background:#f7faf6">
     <label for="marketProductSearch">Search saved produce &amp; mobile products</label>
     <input id="marketProductSearch" type="search" placeholder="Start typing, e.g. broccoli or eggs" autocomplete="off">
@@ -2118,14 +2120,14 @@ function fitMarketName(nameElement, productName, isBus) {
 }
 function makeMarketTag(item) {
   const tag = document.createElement("div");
-  tag.className = "market-tag" + (item.type === "mobile" ? " mobile" : "");
+  tag.className = "market-tag" + (item.type === "mobile" ? " mobile" : "") + (item.type === "mobile" && item.logo === "localcoop" ? " peach" : "");
   const top = document.createElement("div"); top.className = "market-tag-top";
   const name = document.createElement("div");
   name.className = "market-tag-name";
   name.textContent = item.name || "PRODUCT NAME";
   fitMarketName(name, name.textContent, item.type === "mobile" && item.logo === "bus");
   const logo = document.createElement("img");
-  const logoName = item.type === "store" ? "localcoop" : item.logo === "bus" ? "bus" : "rx";
+  const logoName = item.type === "store" || item.logo === "localcoop" ? "localcoop" : item.logo === "bus" ? "bus" : "rx";
   logo.className = "market-tag-logo" + (logoName === "bus" ? " bus" : "");
   logo.src = "images/" + logoName + ".png";
   logo.alt = logoName + " logo";
@@ -2135,10 +2137,14 @@ function makeMarketTag(item) {
   return tag;
 }
 function marketFormValue() {
-  return {type:$("marketTagType").value, logo:$("marketLogo").value, name:$("marketName").value.trim()};
+  const choice = $("marketTagType").value;
+  return {
+    type: choice === "store" ? "store" : "mobile",
+    logo: choice === "mobile-peach" ? "localcoop" : choice === "mobile-bus" ? "bus" : "rx",
+    name: $("marketName").value.trim()
+  };
 }
 function updateMarketPreview() {
-  $("marketLogoRow").style.display = $("marketTagType").value === "mobile" ? "block" : "none";
   $("marketPreview").replaceChildren(makeMarketTag(marketFormValue()));
 }
 function renderMarketQueue() {
@@ -2146,7 +2152,7 @@ function renderMarketQueue() {
   marketQueue.forEach(item => {
     const row = document.createElement("div"); row.className = "market-queue-entry";
     const desc = document.createElement("span");
-    desc.textContent = item.name + " — " + (item.type === "store" ? "In-store" : item.logo === "bus" ? "Mobile Bus" : "Produce Rx");
+    desc.textContent = item.name + " — " + (item.type === "store" ? "In-store" : item.logo === "bus" ? "Veggie Bucks" : item.logo === "localcoop" ? "Mobile Market — Peach Orange" : "Cochise Produce RX");
     const done = makeButton("Mark Printed", "small secondary", () => completeMarketTag(item.id));
     const remove = makeButton("Delete", "small danger", () => deleteMarketTag(item.id));
     done.disabled = remove.disabled = marketBusy;
@@ -2211,7 +2217,7 @@ async function deleteMarketTag(id) {
     if (error) throw error;
   });
 }
-["marketTagType","marketLogo","marketName"].forEach(id => $(id).addEventListener("input",updateMarketPreview));
+["marketTagType","marketName"].forEach(id => $(id).addEventListener("input",updateMarketPreview));
 $("marketAdd").onclick = async () => {
   const item = marketFormValue();
   if (!item.name) { alert("Enter a product name first."); $("marketName").focus(); return; }
