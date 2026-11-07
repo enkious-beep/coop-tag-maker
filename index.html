@@ -591,6 +591,16 @@ button:disabled {
     <label for="marketLogo">Mobile Market logo</label>
     <select id="marketLogo"><option value="rx">Cochise Produce Rx</option><option value="bus">Mobile Market Bus</option></select>
   </div>
+  <div style="border:1px solid #d5e2d4;border-radius:9px;padding:12px;margin:12px 0;background:#f7faf6">
+    <label for="marketProductSearch">Search saved produce &amp; mobile products</label>
+    <input id="marketProductSearch" type="search" placeholder="Start typing, e.g. broccoli or eggs" autocomplete="off">
+    <div id="marketProductMatches" style="max-height:210px;overflow-y:auto;margin-top:8px" aria-live="polite"></div>
+    <div class="row" style="margin-top:8px">
+      <button id="marketSaveProduct" type="button" class="secondary">Save Name to Product Database</button>
+      <button id="marketRefreshProducts" type="button" class="secondary">Refresh Products</button>
+    </div>
+    <p id="marketProductStatus" class="note" aria-live="polite"></p>
+  </div>
   <label for="marketName">Product name (printed BIG)</label>
   <input type="text" id="marketName" maxlength="90" placeholder="Example: Broccoli">
   <h3>Tag Preview</h3>
@@ -884,7 +894,7 @@ async function loadSession() {
   showApp(true);
 
   await Promise.all([
-    loadPendingTags(), loadMarketCloud()
+    loadPendingTags(), loadMarketCloud(), loadMarketProducts()
   ]);
 }
 
@@ -2010,6 +2020,64 @@ async function startWithAuthentication() {
   await loadSession();
 }
 
+
+/* SHARED PRODUCE & MOBILE PRODUCT CATALOG */
+let marketProducts = [];
+function marketProductMessage(message) { $("marketProductStatus").textContent = message; }
+function renderMarketProductMatches() {
+  const box = $("marketProductMatches"); box.replaceChildren();
+  const query = $("marketProductSearch").value.trim().toLocaleLowerCase();
+  const matches = marketProducts.filter(p => p.name.toLocaleLowerCase().includes(query)).slice(0,60);
+  for (const product of matches) {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;gap:6px;align-items:center;justify-content:space-between;border-bottom:1px solid #e2e9e0;padding:5px 0;";
+    const choose = makeButton(product.name, "small secondary", () => {
+      $("marketName").value = product.name; updateMarketPreview();
+      marketProductMessage("Selected " + product.name + ". Choose tag type and add to shared print list.");
+    });
+    choose.style.cssText = "flex:1;text-align:left;white-space:normal";
+    const edit = makeButton("Edit", "small secondary", async () => {
+      const newName = prompt("Change saved product name:", product.name);
+      if (newName === null || newName.trim() === product.name) return;
+      const clean = newName.trim();
+      if (!clean || clean.length > 90) { alert("Product name must be 1–90 characters."); return; }
+      const {error} = await db.from("market_products").update({name:clean}).eq("id",product.id);
+      if (error) { alert("Could not rename product: " + errorText(error)); return; }
+      await loadMarketProducts();
+    });
+    const del = makeButton("Delete", "small danger", async () => {
+      if (!confirm("Remove " + product.name + " from saved products? Existing queued tags are not affected.")) return;
+      const {error} = await db.from("market_products").delete().eq("id",product.id);
+      if (error) { alert("Could not delete product: " + errorText(error)); return; }
+      await loadMarketProducts();
+    });
+    row.append(choose,edit,del); box.appendChild(row);
+  }
+  if (!matches.length) box.textContent = "No matching saved products. Enter a new name below and save it.";
+  marketProductMessage(`${marketProducts.length} saved products available to all active employees.`);
+}
+async function loadMarketProducts() {
+  if (!db || !currentUser) return;
+  const {data,error} = await db.from("market_products").select("id,name").order("name").limit(2000);
+  if (error) { marketProductMessage("Could not load products: " + errorText(error)); return; }
+  marketProducts = data || [];
+  renderMarketProductMatches();
+}
+$("marketProductSearch").addEventListener("input", renderMarketProductMatches);
+$("marketRefreshProducts").onclick = loadMarketProducts;
+$("marketSaveProduct").onclick = async () => {
+  if (!currentUser) { alert("Sign in first."); return; }
+  const name = $("marketName").value.trim();
+  if (!name) { alert("Enter a product name in the Product name field first."); $("marketName").focus(); return; }
+  if (marketProducts.some(p => p.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase())) {
+    marketProductMessage(name + " is already saved."); return;
+  }
+  const {error} = await db.from("market_products").insert({name,created_by:currentUser.id});
+  if (error) { alert("Could not save product: " + errorText(error)); return; }
+  $("marketProductSearch").value = name;
+  await loadMarketProducts();
+  marketProductMessage("Saved " + name + " to the shared product database!");
+};
 
 /* SHARED PRODUCE/MOBILE QUEUE — employee-authenticated Supabase storage. */
 const MARKET_QUEUE_STORAGE_KEY = "coop_market_tags_queue_v1";
