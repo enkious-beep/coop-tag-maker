@@ -584,7 +584,7 @@ button:disabled {
 
 <section class="panel" id="marketTagsPanel">
   <h2>5. Produce &amp; Mobile Market Tags</h2>
-  <p class="note">Large 3.4 × 2.2 inch tags, with a blank white bottom for dry-erase prices. No barcode. These are printed separately from the shared barcode-tag queue. Your print list is automatically saved on this device, even after refreshing. It is not shared across employees or devices.</p>
+  <p class="note">Large 3.4 × 2.2 inch tags, with a blank white bottom for dry-erase prices. No barcode. These are printed separately from the shared barcode-tag queue. Your print list is shared securely with active Co-op employees through Supabase. Printed tags can be marked completed.</p>
   <label for="marketTagType">Tag type</label>
   <select id="marketTagType"><option value="store">In-store Produce — green</option><option value="mobile">Mobile Market — mint green</option></select>
   <div id="marketLogoRow" style="display:none">
@@ -598,7 +598,8 @@ button:disabled {
   <div class="row">
     <button id="marketAdd">Add Tag to Print List</button>
     <button id="marketPrint" class="secondary">Print Produce / Mobile Tags</button>
-    <button id="marketClear" class="secondary">Clear List</button>
+    <button id="marketRefresh" class="secondary">Refresh Shared List</button>
+    <button id="marketImport" class="secondary" style="display:none">Import Tags Saved on This Device</button>
   </div>
   <p id="marketStatus" class="message" aria-live="polite"></p>
   <div id="marketQueue"></div>
@@ -883,7 +884,7 @@ async function loadSession() {
   showApp(true);
 
   await Promise.all([
-    loadPendingTags()
+    loadPendingTags(), loadMarketCloud()
   ]);
 }
 
@@ -930,6 +931,8 @@ $("logoutBtn").onclick = async () => {
   currentUser = null;
   currentProfile = null;
   pendingTags = [];
+  marketQueue = [];
+  renderMarketQueue();
   selectedPendingIds.clear();
 
   $("productResults").replaceChildren();
@@ -2008,23 +2011,24 @@ async function startWithAuthentication() {
 }
 
 
-/* NEW: local produce/mobile tag builder. No database/schema changes. */
-/* Save the produce/mobile print queue on this device between refreshes. */
+/* SHARED PRODUCE/MOBILE QUEUE — employee-authenticated Supabase storage. */
 const MARKET_QUEUE_STORAGE_KEY = "coop_market_tags_queue_v1";
-function loadMarketQueue() {
+const MARKET_MIGRATION_KEY = "coop_market_tags_cloud_migrated_v1";
+let marketQueue = [];
+let marketBusy = false;
+function loadOldMarketQueue() {
   try {
     const saved = JSON.parse(localStorage.getItem(MARKET_QUEUE_STORAGE_KEY) || "[]");
     if (!Array.isArray(saved)) return [];
     return saved.filter(item => item && typeof item.name === "string" &&
-      (item.type === "store" || item.type === "mobile") &&
-      (item.logo === "rx" || item.logo === "bus") && item.name.trim())
-      .map(item => ({ type:item.type, logo:item.logo, name:item.name.slice(0,90) }));
-  } catch (error) { console.warn("Could not restore saved tag list:", error); return []; }
+      ["store","mobile"].includes(item.type) && ["rx","bus"].includes(item.logo) && item.name.trim())
+      .map(item => ({type:item.type, logo:item.logo, name:item.name.trim().slice(0,90)}));
+  } catch (_) { return []; }
 }
-const marketQueue = loadMarketQueue();
-function saveMarketQueue() {
-  try { localStorage.setItem(MARKET_QUEUE_STORAGE_KEY, JSON.stringify(marketQueue)); }
-  catch (error) { console.warn("Could not save tag list:", error); }
+function updateMarketImportButton() {
+  const old = loadOldMarketQueue();
+  $("marketImport").style.display = old.length && localStorage.getItem(MARKET_MIGRATION_KEY) !== "yes" ? "inline-block" : "none";
+  $("marketImport").textContent = `Import ${old.length} Tags Saved on This Device`;
 }
 function makeMarketTag(item) {
   const tag = document.createElement("div");
@@ -2051,32 +2055,87 @@ function updateMarketPreview() {
   $("marketPreview").replaceChildren(makeMarketTag(marketFormValue()));
 }
 function renderMarketQueue() {
-  saveMarketQueue();
   const target = $("marketQueue"); target.replaceChildren();
-  marketQueue.forEach((item,index) => {
+  marketQueue.forEach(item => {
     const row = document.createElement("div"); row.className = "market-queue-entry";
     const desc = document.createElement("span");
     desc.textContent = item.name + " — " + (item.type === "store" ? "In-store" : item.logo === "bus" ? "Mobile Bus" : "Produce Rx");
-    const remove = makeButton("Remove", "small danger", () => { marketQueue.splice(index,1); renderMarketQueue(); });
-    row.append(desc,remove); target.appendChild(row);
+    const done = makeButton("Mark Printed", "small secondary", () => completeMarketTag(item.id));
+    const remove = makeButton("Delete", "small danger", () => deleteMarketTag(item.id));
+    done.disabled = remove.disabled = marketBusy;
+    row.append(desc, done, remove); target.appendChild(row);
   });
-  $("marketPrint").disabled = !marketQueue.length;
-  $("marketStatus").textContent = marketQueue.length + " tag(s) ready to print. Prices stay blank.";
+  $("marketPrint").disabled = marketBusy || !marketQueue.length;
+  $("marketAdd").disabled = marketBusy || !currentUser;
+  $("marketRefresh").disabled = marketBusy || !currentUser;
+  $("marketImport").disabled = marketBusy || !currentUser;
+  $("marketStatus").textContent = `${marketQueue.length} shared tag(s) ready to print. Prices stay blank.`;
+  updateMarketImportButton();
+}
+async function loadMarketCloud() {
+  if (!db || !currentUser) return;
+  try {
+    const {data,error} = await db.from("market_tags")
+      .select("id, name, type, logo, status, created_at")
+      .eq("status","pending").order("created_at",{ascending:true}).limit(1000);
+    if (error) throw error;
+    marketQueue = data || [];
+    renderMarketQueue();
+  } catch (error) {
+    $("marketStatus").textContent = "Could not load shared tags: " + errorText(error) + ". Run the supplied SQL setup first.";
+  }
+}
+async function marketAction(fn) {
+  if (!currentUser || marketBusy) return;
+  marketBusy = true; renderMarketQueue();
+  try { await fn(); await loadMarketCloud(); }
+  catch (error) { alert("Shared tag error: " + errorText(error)); }
+  finally { marketBusy = false; renderMarketQueue(); }
+}
+async function completeMarketTag(id) {
+  if (!confirm("Mark this tag as printed and remove it from the shared pending list?")) return;
+  await marketAction(async () => {
+    const {error} = await db.from("market_tags").update({status:"printed",printed_at:new Date().toISOString(),printed_by:currentUser.id}).eq("id",id);
+    if (error) throw error;
+  });
+}
+async function deleteMarketTag(id) {
+  if (!confirm("Permanently delete this shared tag?")) return;
+  await marketAction(async () => {
+    const {error} = await db.from("market_tags").delete().eq("id",id);
+    if (error) throw error;
+  });
 }
 ["marketTagType","marketLogo","marketName"].forEach(id => $(id).addEventListener("input",updateMarketPreview));
-$("marketAdd").onclick = () => {
+$("marketAdd").onclick = async () => {
   const item = marketFormValue();
   if (!item.name) { alert("Enter a product name first."); $("marketName").focus(); return; }
-  marketQueue.push(item); renderMarketQueue();
-  $("marketName").value = ""; updateMarketPreview();
+  await marketAction(async () => {
+    const {error} = await db.from("market_tags").insert({...item,created_by:currentUser.id});
+    if (error) throw error;
+    $("marketName").value = ""; updateMarketPreview();
+  });
 };
-$("marketClear").onclick = () => {
-  if (!marketQueue.length || confirm("Clear all produce/mobile tags waiting to print?")) { marketQueue.length = 0; renderMarketQueue(); }
+$("marketRefresh").onclick = loadMarketCloud;
+$("marketImport").onclick = async () => {
+  const old = loadOldMarketQueue();
+  if (!old.length || localStorage.getItem(MARKET_MIGRATION_KEY) === "yes") return;
+  if (!confirm(`Import ${old.length} tags saved on THIS device into the shared queue? Only do this once per old device to avoid duplicates.`)) return;
+  await marketAction(async () => {
+    // Store the migration marker only after the complete insert succeeds.
+    // Import one at a time to avoid oversized payloads.
+    // If a partial import fails, check the shared queue before retrying.
+    for (const item of old) {
+      const {error} = await db.from("market_tags").insert({...item,created_by:currentUser.id});
+      if (error) throw error;
+    }
+    localStorage.setItem(MARKET_MIGRATION_KEY,"yes");
+    updateMarketImportButton();
+  });
 };
 $("marketPrint").onclick = async () => {
   if (!marketQueue.length) return;
-  const printButton = $("marketPrint");
-  printButton.disabled = true;
+  const printButton = $("marketPrint"); printButton.disabled = true;
   $("marketStatus").textContent = "Preparing logos for printing...";
   try {
     const sheet = $("sheet"); sheet.replaceChildren();
@@ -2085,29 +2144,22 @@ $("marketPrint").onclick = async () => {
       marketQueue.slice(i,i+8).forEach(item => page.appendChild(makeMarketTag(item)));
       sheet.appendChild(page);
     }
-    // The print dialog must wait until all logo files are loaded AND decoded.
-    // Otherwise Chrome can capture empty image boxes on the first print.
     const logos = [...sheet.querySelectorAll(".market-tag-logo")];
     await Promise.all(logos.map(async img => {
-      if (!img.complete) {
-        await new Promise((resolve, reject) => {
-          img.addEventListener("load", resolve, { once: true });
-          img.addEventListener("error", reject, { once: true });
-        });
-      }
+      if (!img.complete) await new Promise((resolve,reject) => {
+        img.addEventListener("load",resolve,{once:true});
+        img.addEventListener("error",reject,{once:true});
+      });
       if (!img.naturalWidth) throw new Error("Could not load " + img.getAttribute("src"));
       if (img.decode) await img.decode();
     }));
-    // Let the browser finish laying out the decoded images before printing.
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     window.print();
-    $("marketStatus").textContent = "Print dialog opened. Set paper to Letter, scale to 100%, and enable background graphics. The list remains until you clear it.";
+    $("marketStatus").textContent = "Print dialog opened. Tags stay in the shared queue until you mark them printed.";
   } catch (error) {
-    $("marketStatus").textContent = "Logo not ready: " + (error.message || error) + ". Check the images folder and try again.";
+    $("marketStatus").textContent = "Logo not ready: " + (error.message || error);
     alert($("marketStatus").textContent);
-  } finally {
-    printButton.disabled = false;
-  }
+  } finally { printButton.disabled = false; }
 };
 updateMarketPreview();
 renderMarketQueue();
