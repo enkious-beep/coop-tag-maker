@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Co-op Tag Maker</title>
 
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://unpkg.com/@zxing/browser@0.1.5/umd/zxing-browser.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
@@ -338,7 +338,7 @@ button:disabled {
 .market-tag { width:3.4in; height:2.2in; border:1px solid #385b51; border-radius:0; overflow:hidden; background:white; color:#142d26; flex-shrink:0; font-family:Arial,sans-serif; }
 .market-tag-top { height:1.12in; background:#a9b99b; display:flex; align-items:center; justify-content:space-between; gap:4px; padding:3px 6px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
 .market-tag.mobile .market-tag-top { background:#ccece3; }
-.market-tag-name { flex:1; min-width:0; font-size:32px; font-weight:900; line-height:1.02; overflow-wrap:anywhere; text-transform:uppercase; letter-spacing:-.7px; }
+.market-tag-name { flex:1; min-width:0; font-size:32px; font-weight:900; line-height:1.02; overflow-wrap:normal; word-break:normal; text-transform:uppercase; letter-spacing:-.7px; }
 .market-tag-name.long { font-size:25px; }
 .market-tag-name.very-long { font-size:19px; }
 .market-tag-logo { display:block; width:1.04in; height:1.04in; object-fit:contain; flex-shrink:0; }
@@ -1667,14 +1667,19 @@ function printPending(ids) {
    ========================================= */
 
 async function stopScanner() {
+  scanning = false;
   if (scanner) {
-    try { await scanner.stop(); } catch (e) {}
-    try { scanner.clear(); } catch (e) {}
+    try { scanner.stop(); } catch (_) {}
     scanner = null;
   }
-
-  scanning = false;
-  $("reader").style.display = "none";
+  const reader = $("reader");
+  const video = reader.querySelector("video");
+  if (video && video.srcObject) {
+    try { video.srcObject.getTracks().forEach(track => track.stop()); } catch (_) {}
+    video.srcObject = null;
+  }
+  reader.replaceChildren();
+  reader.style.display = "none";
   $("stopBtn").style.display = "none";
 }
 
@@ -1682,45 +1687,43 @@ $("stopBtn").onclick = stopScanner;
 
 $("scanBtn").onclick = async () => {
   if (scanning) return;
-
-  if (!window.Html5Qrcode) {
-    message(
-      "status",
-      "Scanner unavailable. Enter UPC manually."
-    );
+  if (!window.ZXingBrowser || !window.ZXingBrowser.BrowserMultiFormatReader) {
+    message("status", "ZXing scanner unavailable. Enter UPC manually.");
     return;
   }
 
+  const reader = $("reader");
+  const video = document.createElement("video");
+  video.setAttribute("playsinline", "");
+  video.setAttribute("autoplay", "");
+  video.muted = true;
+  video.style.cssText = "display:block;width:100%;max-width:420px;border-radius:8px;background:#111";
+  reader.replaceChildren(video);
+  reader.style.display = "block";
+  $("stopBtn").style.display = "inline-block";
+  scanning = true;
+
   try {
-    $("reader").style.display = "block";
-    $("stopBtn").style.display = "inline-block";
-
-    scanner = new Html5Qrcode("reader");
-    scanning = true;
-
-    await scanner.start(
-      { facingMode: "environment" },
-      {
-        fps: 10,
-        qrbox: { width: 250, height: 120 }
-      },
-      async decodedText => {
-        if (!scanning) return;
-
+    const codeReader = new ZXingBrowser.BrowserMultiFormatReader();
+    const controls = await codeReader.decodeFromConstraints(
+      { audio: false, video: { facingMode: { ideal: "environment" } } },
+      video,
+      (result, error, activeControls) => {
+        if (!result || !scanning) return;
+        const value = result.getText().trim();
+        if (!value) return;
+        // Stop immediately to prevent repeated detections.
         scanning = false;
-        $("upc").value = decodedText;
-
-        await stopScanner();
-        await lookup();
-      },
-      () => {}
+        try { activeControls.stop(); } catch (_) {}
+        $("upc").value = value;
+        stopScanner().then(() => lookup());
+      }
     );
+    if (scanning) scanner = controls;
+    else { try { controls.stop(); } catch (_) {} }
   } catch (error) {
-    message(
-      "status",
-      "Camera unavailable. Check camera permissions."
-    );
     await stopScanner();
+    message("status", "Camera unavailable. Check camera permission and use HTTPS, or enter UPC manually.");
   }
 };
 
@@ -2098,13 +2101,28 @@ function updateMarketImportButton() {
   $("marketImport").style.display = old.length && localStorage.getItem(MARKET_MIGRATION_KEY) !== "yes" ? "inline-block" : "none";
   $("marketImport").textContent = `Import ${old.length} Tags Saved on This Device`;
 }
+function fitMarketName(nameElement, productName, isBus) {
+  // Measure the longest word so no product name breaks in the middle.
+  // Keep larger type where space allows; natural wrapping at spaces is fine.
+  const canvas = fitMarketName.canvas || (fitMarketName.canvas = document.createElement("canvas"));
+  const ctx = canvas.getContext("2d");
+  const maxWidth = isBus ? 166 : 190; // available text width in 3.4-inch tag, in CSS pixels
+  const words = (productName || "PRODUCT NAME").toUpperCase().split(/\s+/);
+  let fontSize = 32;
+  for (; fontSize >= 12; fontSize--) {
+    ctx.font = `900 ${fontSize}px Arial`;
+    if (words.every(word => ctx.measureText(word).width <= maxWidth - 5)) break;
+  }
+  nameElement.style.fontSize = Math.max(12, fontSize) + "px";
+}
 function makeMarketTag(item) {
   const tag = document.createElement("div");
   tag.className = "market-tag" + (item.type === "mobile" ? " mobile" : "");
   const top = document.createElement("div"); top.className = "market-tag-top";
   const name = document.createElement("div");
-  name.className = "market-tag-name" + (item.name.length > 24 ? " very-long" : item.name.length > 15 ? " long" : "");
+  name.className = "market-tag-name";
   name.textContent = item.name || "PRODUCT NAME";
+  fitMarketName(name, name.textContent, item.type === "mobile" && item.logo === "bus");
   const logo = document.createElement("img");
   const logoName = item.type === "store" ? "localcoop" : item.logo === "bus" ? "bus" : "rx";
   logo.className = "market-tag-logo" + (logoName === "bus" ? " bus" : "");
