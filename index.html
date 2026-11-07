@@ -2073,16 +2073,41 @@ $("marketAdd").onclick = () => {
 $("marketClear").onclick = () => {
   if (!marketQueue.length || confirm("Clear all produce/mobile tags waiting to print?")) { marketQueue.length = 0; renderMarketQueue(); }
 };
-$("marketPrint").onclick = () => {
+$("marketPrint").onclick = async () => {
   if (!marketQueue.length) return;
-  const sheet = $("sheet"); sheet.replaceChildren();
-  for (let i=0;i<marketQueue.length;i+=8) {
-    const page = document.createElement("div"); page.className = "market-print-page";
-    marketQueue.slice(i,i+8).forEach(item => page.appendChild(makeMarketTag(item)));
-    sheet.appendChild(page);
+  const printButton = $("marketPrint");
+  printButton.disabled = true;
+  $("marketStatus").textContent = "Preparing logos for printing...";
+  try {
+    const sheet = $("sheet"); sheet.replaceChildren();
+    for (let i=0;i<marketQueue.length;i+=8) {
+      const page = document.createElement("div"); page.className = "market-print-page";
+      marketQueue.slice(i,i+8).forEach(item => page.appendChild(makeMarketTag(item)));
+      sheet.appendChild(page);
+    }
+    // The print dialog must wait until all logo files are loaded AND decoded.
+    // Otherwise Chrome can capture empty image boxes on the first print.
+    const logos = [...sheet.querySelectorAll(".market-tag-logo")];
+    await Promise.all(logos.map(async img => {
+      if (!img.complete) {
+        await new Promise((resolve, reject) => {
+          img.addEventListener("load", resolve, { once: true });
+          img.addEventListener("error", reject, { once: true });
+        });
+      }
+      if (!img.naturalWidth) throw new Error("Could not load " + img.getAttribute("src"));
+      if (img.decode) await img.decode();
+    }));
+    // Let the browser finish laying out the decoded images before printing.
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    window.print();
+    $("marketStatus").textContent = "Print dialog opened. Set paper to Letter, scale to 100%, and enable background graphics. The list remains until you clear it.";
+  } catch (error) {
+    $("marketStatus").textContent = "Logo not ready: " + (error.message || error) + ". Check the images folder and try again.";
+    alert($("marketStatus").textContent);
+  } finally {
+    printButton.disabled = false;
   }
-  window.print();
-  $("marketStatus").textContent = "Print dialog opened. Set paper to Letter, scale to 100%, and enable background graphics. The list remains until you clear it.";
 };
 updateMarketPreview();
 renderMarketQueue();
