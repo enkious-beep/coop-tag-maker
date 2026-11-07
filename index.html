@@ -609,6 +609,7 @@ button:disabled {
     <button id="marketAdd">Add Tag to Print List</button>
     <button id="marketPrint" class="secondary">Print Produce / Mobile Tags</button>
     <button id="marketRefresh" class="secondary">Refresh Shared List</button>
+    <button id="marketMarkAll" type="button" class="secondary">Mark ALL as Printed</button>
     <button id="marketImport" class="secondary" style="display:none">Import Tags Saved on This Device</button>
   </div>
   <p id="marketStatus" class="message" aria-live="polite"></p>
@@ -2154,6 +2155,7 @@ function renderMarketQueue() {
   $("marketPrint").disabled = marketBusy || !marketQueue.length;
   $("marketAdd").disabled = marketBusy || !currentUser;
   $("marketRefresh").disabled = marketBusy || !currentUser;
+  $("marketMarkAll").disabled = marketBusy || !currentUser || !marketQueue.length;
   $("marketImport").disabled = marketBusy || !currentUser;
   $("marketStatus").textContent = `${marketQueue.length} shared tag(s) ready to print. Prices stay blank.`;
   updateMarketImportButton();
@@ -2185,6 +2187,23 @@ async function completeMarketTag(id) {
     if (error) throw error;
   });
 }
+async function completeAllMarketTags() {
+  if (!currentUser || marketBusy || !marketQueue.length) return;
+  // Freeze the IDs so newly added tags from other devices are not marked printed.
+  const ids = marketQueue.map(item => item.id);
+  if (!confirm(`Mark ALL ${ids.length} currently listed produce/mobile tags as printed? They will disappear from the shared pending list on every device.`)) return;
+  await marketAction(async () => {
+    const timestamp = new Date().toISOString();
+    // Batch to avoid excessively long Supabase URLs for large queues.
+    for (let i = 0; i < ids.length; i += 50) {
+      const {error} = await db.from("market_tags")
+        .update({status:"printed", printed_at:timestamp, printed_by:currentUser.id})
+        .eq("status","pending")
+        .in("id",ids.slice(i,i+50));
+      if (error) throw error;
+    }
+  });
+}
 async function deleteMarketTag(id) {
   if (!confirm("Permanently delete this shared tag?")) return;
   await marketAction(async () => {
@@ -2203,6 +2222,7 @@ $("marketAdd").onclick = async () => {
   });
 };
 $("marketRefresh").onclick = loadMarketCloud;
+$("marketMarkAll").onclick = completeAllMarketTags;
 $("marketImport").onclick = async () => {
   const old = loadOldMarketQueue();
   if (!old.length || localStorage.getItem(MARKET_MIGRATION_KEY) === "yes") return;
