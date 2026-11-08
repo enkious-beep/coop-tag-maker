@@ -365,6 +365,13 @@ button:disabled {
 .queue-type-icon { width:19px; height:19px; display:inline-flex; flex:0 0 19px; align-items:center; justify-content:center; }
 .queue-type-icon svg { display:block; width:100%; height:100%; }
 
+/* Barcode integrity fix: NEVER stretch an SVG barcode independently in X/Y.
+   Keep all bars proportional and retain quiet zones around the symbol. */
+.tag-barcode { align-items:flex-start; overflow:visible; }
+.tag-barcode svg { display:block; width:100%; max-width:100%; height:calc(100% - 10px); flex-shrink:1; }
+.tag.tag-refrigerated .tag-barcode svg { height:calc(100% - 8px); }
+.tag-barcode .barcode-digits { align-self:flex-start; padding-left:8px; }
+
 /* NEW: handwritten-price produce and mobile market tags. Original shelf tag unchanged. */
 .market-tag { width:3.4in; height:2.2in; border:1px solid #385b51; border-radius:0; overflow:hidden; background:white; color:#142d26; flex-shrink:0; font-family:Arial,sans-serif; }
 .market-tag-top { height:1.12in; background:#a9b99b; display:flex; align-items:center; justify-content:space-between; gap:4px; padding:3px 6px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
@@ -823,7 +830,7 @@ function makeTag(data, tagType = "regular") {
     "http://www.w3.org/2000/svg", "svg"
   );
 
-  barcode.setAttribute("preserveAspectRatio", "none");
+  barcode.setAttribute("preserveAspectRatio", "xMinYMid meet");
   barcodeBox.appendChild(barcode);
   const digits = document.createElement("div");
   digits.className = "barcode-digits";
@@ -879,7 +886,7 @@ function makeTag(data, tagType = "regular") {
     const options = {
       format,
       displayValue: false,
-      margin: 0,       // Quiet zones supplied by the barcode box's side padding
+      margin: 8,       // Keep quiet zones inside SVG at both ends
       width: 2,        // SVG viewBox scales uniformly; never distort bar widths
       height: tagType === "refrigerated" ? 22 : 32,
       lineColor: "#000",
