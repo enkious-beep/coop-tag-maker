@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Co-op Tag Maker</title>
+<title>Co-op Tag/Sign Maker</title>
 
 <script src="https://unpkg.com/@zxing/browser@0.1.5/umd/zxing-browser.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
@@ -334,6 +334,27 @@ button:disabled {
   }
 }
 
+/* Shelf-tag types and scanner-friendly UPC display */
+.tag.tag-refrigerated { width:2in; height:.75in; }
+.tag-corner-icon { position:absolute; top:.37in; right:5px; width:18px; height:18px; z-index:2; display:flex; align-items:center; justify-content:center; }
+.tag-corner-icon svg { width:100%; height:100%; }
+.tag.tag-refrigerated .tag-header { height:.19in; padding:1px 4px; font-size:10px; }
+.tag.tag-refrigerated .tag-name { padding:2px 23px 0 4px; font-size:8px; line-height:1; max-height:.15in; white-space:nowrap; text-overflow:ellipsis; }
+.tag.tag-refrigerated .tag-dollar { top:.35in; left:4px; font-size:12px; }
+.tag.tag-refrigerated .tag-footer { bottom:1px; left:2px; right:2px; height:.27in; gap:1px; }
+.tag.tag-refrigerated .tag-barcode { width:1.48in; height:.26in; }
+.tag.tag-refrigerated .tag-flags { transform:scale(.62); transform-origin:right bottom; }
+.tag.tag-refrigerated .tag-corner-icon { top:.20in; right:3px; width:13px; height:13px; }
+.tag-barcode { flex-direction:column; align-items:center; justify-content:flex-end; overflow:hidden; padding:0 7px; }
+.tag.tag-refrigerated .tag-barcode { padding:0 4px; }
+.tag-barcode svg { height:calc(100% - 10px); width:100%; }
+.tag-barcode .barcode-digits { font-size:9px; font-weight:700; letter-spacing:.3px; line-height:10px; height:10px; white-space:nowrap; }
+.tag.tag-refrigerated .barcode-digits { font-size:7px; letter-spacing:0; height:8px; line-height:8px; }
+.tag.tag-refrigerated .tag-barcode svg { height:calc(100% - 8px); }
+.print-page.print-page-refrigerated { grid-template-columns:repeat(3,2in); grid-template-rows:repeat(12,.75in); column-gap:.12in; row-gap:.05in; }
+.print-page.print-page-frozen { grid-template-columns:3in 3in; }
+@media print { .tag-corner-icon { print-color-adjust:exact; -webkit-print-color-adjust:exact; } }
+
 /* NEW: handwritten-price produce and mobile market tags. Original shelf tag unchanged. */
 .market-tag { width:3.4in; height:2.2in; border:1px solid #385b51; border-radius:0; overflow:hidden; background:white; color:#142d26; flex-shrink:0; font-family:Arial,sans-serif; }
 .market-tag-top { height:1.12in; background:#a9b99b; display:flex; align-items:center; justify-content:space-between; gap:4px; padding:3px 6px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
@@ -361,7 +382,7 @@ button:disabled {
 <body>
 
 <header>
-  <h1>Co-op Tag Maker</h1>
+  <h1>Co-op Tag/Sign Maker</h1>
   <div>Scan • Save • Search • Print</div>
 </header>
 
@@ -523,6 +544,13 @@ button:disabled {
     Product lookup does not determine these claims.
   </p>
 
+  <label for="shelfTagType">Barcode tag type</label>
+  <select id="shelfTagType" style="width:100%;padding:12px;font-size:16px;border:1px solid #a6b9a3;border-radius:7px;background:white">
+    <option value="regular">Regular — 3 × 1.25 inches</option>
+    <option value="refrigerated">Refrigerated — 2 × 0.75 inches (blue thermometer)</option>
+    <option value="frozen">Frozen — 3 × 1.25 inches (blue snowflake)</option>
+  </select>
+  <p class="note">Each tag type prints on separate sheets. Select the type before adding it to the shared queue.</p>
   <h3>Tag Preview</h3>
   <div id="preview" class="tag"></div>
 
@@ -605,6 +633,13 @@ button:disabled {
   </div>
   <label for="marketName">Product name (printed BIG)</label>
   <input type="text" id="marketName" maxlength="90" placeholder="Example: Broccoli">
+  <label for="shelfTagType">Barcode tag type</label>
+  <select id="shelfTagType" style="width:100%;padding:12px;font-size:16px;border:1px solid #a6b9a3;border-radius:7px;background:white">
+    <option value="regular">Regular — 3 × 1.25 inches</option>
+    <option value="refrigerated">Refrigerated — 2 × 0.75 inches (blue thermometer)</option>
+    <option value="frozen">Frozen — 3 × 1.25 inches (blue snowflake)</option>
+  </select>
+  <p class="note">Each tag type prints on separate sheets. Select the type before adding it to the shared queue.</p>
   <h3>Tag Preview</h3>
   <div id="marketPreview"></div>
   <div class="row">
@@ -739,9 +774,10 @@ function errorText(error) {
    SHELF TAG - SAME DESIGN AS BEFORE
    ========================================= */
 
-function makeTag(data) {
+function makeTag(data, tagType = "regular") {
+  tagType = ["regular","refrigerated","frozen"].includes(tagType) ? tagType : "regular";
   const tag = document.createElement("div");
-  tag.className = "tag";
+  tag.className = "tag tag-" + tagType;
 
   const header = document.createElement("div");
   header.className = "tag-header";
@@ -766,8 +802,12 @@ function makeTag(data) {
     "http://www.w3.org/2000/svg", "svg"
   );
 
-  barcode.setAttribute("preserveAspectRatio", "none");
+  barcode.setAttribute("preserveAspectRatio", "xMidYMid meet");
   barcodeBox.appendChild(barcode);
+  const digits = document.createElement("div");
+  digits.className = "barcode-digits";
+  digits.textContent = String(data.upc || "").trim();
+  barcodeBox.appendChild(digits);
 
   const flags = document.createElement("div");
   flags.className = "tag-flags";
@@ -796,6 +836,16 @@ function makeTag(data) {
 
   footer.append(barcodeBox, flags);
   tag.append(header, name, dollar, footer);
+  if (tagType !== "regular") {
+    const icon = document.createElement("div");
+    icon.className = "tag-corner-icon";
+    icon.setAttribute("aria-label", tagType === "frozen" ? "Frozen" : "Refrigerated");
+    // Simple inline SVG icons: thermometer for refrigerated, snowflake for frozen.
+    icon.innerHTML = tagType === "frozen"
+      ? '<svg viewBox="0 0 24 24" fill="none" stroke="#1765b3" stroke-width="2" stroke-linecap="round"><path d="M12 2v20M4 6l16 12M20 6L4 18M9 5l3 3 3-3M9 19l3-3 3 3"/></svg>'
+      : '<svg viewBox="0 0 24 24" fill="none" stroke="#1681c4" stroke-width="2" stroke-linecap="round"><path d="M10 14V5a3 3 0 0 1 6 0v9a5 5 0 1 1-6 0Z"/><path d="M13 9v8"/><circle cx="13" cy="18" r="1" fill="#1681c4"/></svg>';
+    tag.appendChild(icon);
+  }
 
   if (data.upc && window.JsBarcode) {
     const value = String(data.upc).trim();
@@ -810,9 +860,9 @@ function makeTag(data) {
     const options = {
       format,
       displayValue: false,
-      margin: 12,      // Keep clear white margins around the bars
-      width: 2.15,    // Wider barcode modules; SVG fills the allotted horizontal space
-      height: 27,     // Shorter barcode leaves handwriting space above
+      margin: 0,       // Quiet zones supplied by the barcode box's side padding
+      width: 2,        // SVG viewBox scales uniformly; never distort bar widths
+      height: tagType === "refrigerated" ? 22 : 32,
       lineColor: "#000",
       background: "#fff"
     };
@@ -833,11 +883,12 @@ function makeTag(data) {
 }
 
 function updatePreview() {
-  const preview = makeTag(getProduct());
+  const preview = makeTag(getProduct(), $("shelfTagType").value);
   preview.id = "preview";
   $("preview").replaceWith(preview);
 }
 
+$("shelfTagType").addEventListener("change", updatePreview);
 ["upc", "brand", "product"].forEach(id => {
   $(id).addEventListener("input", () => { updatePreview(); updateProductActions(); });
 });
@@ -1386,7 +1437,8 @@ async function addPendingTag(productRecord) {
     .insert({
       product_id: productRecord.id,
       quantity: 1,
-      created_by: currentUser.id
+      created_by: currentUser.id,
+      tag_type: $("shelfTagType").value
     });
 
   if (error) throw error;
@@ -1435,7 +1487,7 @@ async function loadPendingTags() {
     const pageSize = 500;
     for (let offset = 0; ; offset += pageSize) {
       const { data, error } = await db.from("unprinted_tags")
-        .select("id, product_id, quantity, created_at, products(id, upc, brand, product_name, organic, snap_eligible, non_gmo)")
+        .select("id, product_id, quantity, created_at, tag_type, products(id, upc, brand, product_name, organic, snap_eligible, non_gmo)")
         .order("created_at", { ascending: false })
         .range(offset, offset + pageSize - 1);
       if (error) throw error;
@@ -1515,7 +1567,7 @@ function renderPendingTags() {
     };
     top.append(checkbox, createText("item-title grow", product.brand + " — " + product.product_name));
     box.appendChild(top);
-    box.appendChild(createText("item-details", "UPC: " + product.upc + " | Quantity: " + item.quantity));
+    box.appendChild(createText("item-details", "UPC: " + product.upc + " | " + ({regular:"Regular",refrigerated:"Refrigerated",frozen:"Frozen"}[item.tag_type] || "Regular") + " | Quantity: " + item.quantity));
     const actions = document.createElement("div");
     actions.className = "item-actions";
     actions.appendChild(makeButton("Print", "small", () => printPending([item.id])));
@@ -1629,30 +1681,26 @@ function printPending(ids) {
   const sheet = $("sheet");
   sheet.replaceChildren();
 
-  const printData = [];
-
+  // Group by physical tag size/type so no sheet mixes layouts.
+  const groups = { regular: [], refrigerated: [], frozen: [] };
   items.forEach(item => {
     if (!item.products) return;
-
-    for (let i = 0; i < item.quantity; i++) {
-      printData.push(item.products);
-    }
+    const type = groups[item.tag_type] ? item.tag_type : "regular";
+    for (let i = 0; i < item.quantity; i++) groups[type].push(item.products);
   });
-
-  if (!printData.length) {
+  if (!Object.values(groups).some(g => g.length)) {
     alert("No printable tags found.");
     return;
   }
-
-  for (let i = 0; i < printData.length; i += 14) {
-    const page = document.createElement("div");
-    page.className = "print-page";
-
-    printData.slice(i, i + 14).forEach(product => {
-      page.appendChild(makeTag(product));
-    });
-
-    sheet.appendChild(page);
+  for (const type of ["regular", "refrigerated", "frozen"]) {
+    const data = groups[type];
+    const pageSize = type === "refrigerated" ? 36 : 14;
+    for (let i = 0; i < data.length; i += pageSize) {
+      const page = document.createElement("div");
+      page.className = "print-page print-page-" + type;
+      data.slice(i, i + pageSize).forEach(product => page.appendChild(makeTag(product, type)));
+      sheet.appendChild(page);
+    }
   }
 
   printingIds = items.map(item => item.id);
