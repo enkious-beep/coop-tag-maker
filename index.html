@@ -355,6 +355,16 @@ button:disabled {
 .print-page.print-page-frozen { grid-template-columns:3in 3in; }
 @media print { .tag-corner-icon { print-color-adjust:exact; -webkit-print-color-adjust:exact; } }
 
+/* PATCH: left-aligned, wider barcode for ALL shelf tags; UPC stays underneath.
+   The SVG's bars retain their relative widths; the UPC quiet space comes from
+   the horizontal padding. Test physical output with the checkout scanner. */
+.tag-footer { justify-content:flex-start; }
+.tag-barcode { width:2.48in; padding:0 8px; align-items:stretch; }
+.tag-barcode svg { width:100%; }
+.tag.tag-refrigerated .tag-barcode { width:1.62in; padding:0 4px; }
+.queue-type-icon { width:19px; height:19px; display:inline-flex; flex:0 0 19px; align-items:center; justify-content:center; }
+.queue-type-icon svg { display:block; width:100%; height:100%; }
+
 /* NEW: handwritten-price produce and mobile market tags. Original shelf tag unchanged. */
 .market-tag { width:3.4in; height:2.2in; border:1px solid #385b51; border-radius:0; overflow:hidden; background:white; color:#142d26; flex-shrink:0; font-family:Arial,sans-serif; }
 .market-tag-top { height:1.12in; background:#a9b99b; display:flex; align-items:center; justify-content:space-between; gap:4px; padding:3px 6px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
@@ -774,6 +784,17 @@ function errorText(error) {
    SHELF TAG - SAME DESIGN AS BEFORE
    ========================================= */
 
+function shelfTypeIconSvg(tagType) {
+  if (tagType === "frozen") {
+    // Six clean blue snowflake arms, with no crossing red strokes or emoji rendering.
+    return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#1765b3" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M3.34 7l17.32 10M3.34 17l17.32-10"/><path d="M8.8 5.2L12 8.4l3.2-3.2M8.8 18.8l3.2-3.2 3.2 3.2M3.5 11.3l4.4-.9-1.3-4.3M20.5 12.7l-4.4.9 1.3 4.3M6.6 17.9l1.3-4.3-4.4-.9M17.4 6.1l-1.3 4.3 4.4.9"/></svg>';
+  }
+  if (tagType === "refrigerated") {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#1681c4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14V5a3 3 0 0 1 6 0v9a5 5 0 1 1-6 0Z"/><path d="M13 9v8"/><circle cx="13" cy="18" r="1" fill="#1681c4"/></svg>';
+  }
+  return "";
+}
+
 function makeTag(data, tagType = "regular") {
   tagType = ["regular","refrigerated","frozen"].includes(tagType) ? tagType : "regular";
   const tag = document.createElement("div");
@@ -802,7 +823,7 @@ function makeTag(data, tagType = "regular") {
     "http://www.w3.org/2000/svg", "svg"
   );
 
-  barcode.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  barcode.setAttribute("preserveAspectRatio", "none");
   barcodeBox.appendChild(barcode);
   const digits = document.createElement("div");
   digits.className = "barcode-digits";
@@ -841,9 +862,7 @@ function makeTag(data, tagType = "regular") {
     icon.className = "tag-corner-icon";
     icon.setAttribute("aria-label", tagType === "frozen" ? "Frozen" : "Refrigerated");
     // Simple inline SVG icons: thermometer for refrigerated, snowflake for frozen.
-    icon.innerHTML = tagType === "frozen"
-      ? '<svg viewBox="0 0 24 24" fill="none" stroke="#1765b3" stroke-width="2" stroke-linecap="round"><path d="M12 2v20M4 6l16 12M20 6L4 18M9 5l3 3 3-3M9 19l3-3 3 3"/></svg>'
-      : '<svg viewBox="0 0 24 24" fill="none" stroke="#1681c4" stroke-width="2" stroke-linecap="round"><path d="M10 14V5a3 3 0 0 1 6 0v9a5 5 0 1 1-6 0Z"/><path d="M13 9v8"/><circle cx="13" cy="18" r="1" fill="#1681c4"/></svg>';
+    icon.innerHTML = shelfTypeIconSvg(tagType);
     tag.appendChild(icon);
   }
 
@@ -1565,7 +1584,16 @@ function renderPendingTags() {
       else selectedPendingIds.delete(item.id);
       renderPendingTags();
     };
-    top.append(checkbox, createText("item-title grow", product.brand + " — " + product.product_name));
+    top.appendChild(checkbox);
+    if (item.tag_type === "frozen" || item.tag_type === "refrigerated") {
+      const typeIcon = document.createElement("span");
+      typeIcon.className = "queue-type-icon";
+      typeIcon.title = item.tag_type === "frozen" ? "Frozen" : "Refrigerated";
+      typeIcon.setAttribute("aria-label", typeIcon.title);
+      typeIcon.innerHTML = shelfTypeIconSvg(item.tag_type);
+      top.appendChild(typeIcon);
+    }
+    top.appendChild(createText("item-title grow", product.brand + " — " + product.product_name));
     box.appendChild(top);
     box.appendChild(createText("item-details", "UPC: " + product.upc + " | " + ({regular:"Regular",refrigerated:"Refrigerated",frozen:"Frozen"}[item.tag_type] || "Regular") + " | Quantity: " + item.quantity));
     const actions = document.createElement("div");
@@ -1681,24 +1709,30 @@ function printPending(ids) {
   const sheet = $("sheet");
   sheet.replaceChildren();
 
-  // Group by physical tag size/type so no sheet mixes layouts.
-  const groups = { regular: [], refrigerated: [], frozen: [] };
+  // Regular and frozen are both 3 x 1.25 in, so they share the SAME sheets.
+  // Refrigerated tags are 2 x .75 in and print on their own sheets.
+  const fullSize = [];
+  const refrigerated = [];
   items.forEach(item => {
     if (!item.products) return;
-    const type = groups[item.tag_type] ? item.tag_type : "regular";
-    for (let i = 0; i < item.quantity; i++) groups[type].push(item.products);
+    const type = ["regular", "refrigerated", "frozen"].includes(item.tag_type) ? item.tag_type : "regular";
+    const destination = type === "refrigerated" ? refrigerated : fullSize;
+    for (let i = 0; i < item.quantity; i++) destination.push({ product: item.products, type });
   });
-  if (!Object.values(groups).some(g => g.length)) {
+  if (!fullSize.length && !refrigerated.length) {
     alert("No printable tags found.");
     return;
   }
-  for (const type of ["regular", "refrigerated", "frozen"]) {
-    const data = groups[type];
-    const pageSize = type === "refrigerated" ? 36 : 14;
-    for (let i = 0; i < data.length; i += pageSize) {
+  for (const group of [
+    { items: fullSize, pageSize: 14, pageClass: "print-page-regular" },
+    { items: refrigerated, pageSize: 36, pageClass: "print-page-refrigerated" }
+  ]) {
+    for (let i = 0; i < group.items.length; i += group.pageSize) {
       const page = document.createElement("div");
-      page.className = "print-page print-page-" + type;
-      data.slice(i, i + pageSize).forEach(product => page.appendChild(makeTag(product, type)));
+      page.className = "print-page " + group.pageClass;
+      group.items.slice(i, i + group.pageSize).forEach(({ product, type }) => {
+        page.appendChild(makeTag(product, type));
+      });
       sheet.appendChild(page);
     }
   }
