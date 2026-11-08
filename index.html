@@ -372,6 +372,13 @@ button:disabled {
 .tag.tag-refrigerated .tag-barcode svg { height:calc(100% - 8px); }
 .tag-barcode .barcode-digits { align-self:flex-start; padding-left:8px; }
 
+/* Barcode patch: render JsBarcode at its native SVG dimensions.
+   CSS must not shrink it to fit the narrow footer height. */
+.tag-barcode { align-items:flex-start; justify-content:flex-end; overflow:hidden; }
+.tag-barcode svg { width:auto !important; height:auto !important; max-width:none !important; flex:0 0 auto; }
+.tag-barcode .barcode-digits { padding-left:6px; }
+.tag.tag-refrigerated .tag-barcode svg { width:auto !important; height:auto !important; }
+
 /* NEW: handwritten-price produce and mobile market tags. Original shelf tag unchanged. */
 .market-tag { width:3.4in; height:2.2in; border:1px solid #385b51; border-radius:0; overflow:hidden; background:white; color:#142d26; flex-shrink:0; font-family:Arial,sans-serif; }
 .market-tag-top { height:1.12in; background:#a9b99b; display:flex; align-items:center; justify-content:space-between; gap:4px; padding:3px 6px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
@@ -514,6 +521,12 @@ button:disabled {
   <input id="upc" type="text"
          inputmode="numeric"
          placeholder="Scan or enter barcode">
+
+  <label for="quickNameSearch">Or search by product name (Co-op database only)</label>
+  <input id="quickNameSearch" type="search" placeholder="Example: alkaline water, cheese, apples" autocomplete="off">
+  <button class="secondary" id="quickNameSearchBtn">Search Co-op Products</button>
+  <div id="quickNameResults" aria-live="polite"></div>
+  <p id="quickNameStatus" class="message" aria-live="polite"></p>
 
   <button id="lookupBtn">Find Product</button>
   <button class="secondary" id="newBtn">New Product</button>
@@ -887,7 +900,7 @@ function makeTag(data, tagType = "regular") {
       format,
       displayValue: false,
       margin: 8,       // Keep quiet zones inside SVG at both ends
-      width: 2,        // SVG viewBox scales uniformly; never distort bar widths
+      width: tagType === "refrigerated" ? 1.35 : 2.0, // Native bar module width; no SVG stretching
       height: tagType === "refrigerated" ? 22 : 32,
       lineColor: "#000",
       background: "#fff"
@@ -1180,6 +1193,53 @@ async function lookup() {
 
   updatePreview();
 }
+
+// Quick name search: ONLY our Supabase products table, never external UPC services.
+async function quickSearchByName() {
+  const term = $("quickNameSearch").value.trim();
+  const results = $("quickNameResults");
+  results.replaceChildren();
+  if (!term) { message("quickNameStatus", "Type a product name to search."); return; }
+  message("quickNameStatus", "Searching Co-op products...");
+  try {
+    const {data, error} = await db.from("products")
+      .select("*")
+      .ilike("product_name", "%" + term + "%")
+      .order("product_name")
+      .limit(50);
+    if (error) throw error;
+    for (const item of data || []) {
+      const row = document.createElement("div");
+      row.className = "item";
+      const label = document.createElement("div");
+      label.textContent = (item.brand ? item.brand + " — " : "") +
+        (item.product_name || "") + " | UPC: " + (item.upc || "");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "small secondary";
+      button.textContent = "Use Product";
+      button.addEventListener("click", () => {
+        fillProduct(item);
+        message("quickNameStatus", "Loaded " + item.product_name + " from Co-op database.");
+      });
+      row.append(label, button);
+      results.appendChild(row);
+    }
+    message("quickNameStatus", (data || []).length + " Co-op product(s) found.");
+  } catch (error) {
+    message("quickNameStatus", "Search failed: " + errorText(error));
+  }
+}
+$("quickNameSearchBtn").onclick = quickSearchByName;
+$("quickNameSearch").addEventListener("keydown", e => {
+  if (e.key === "Enter") { e.preventDefault(); quickSearchByName(); }
+});
+$("quickNameSearch").addEventListener("input", () => {
+  if (!$("quickNameSearch").value.trim()) {
+    $("quickNameResults").replaceChildren();
+    message("quickNameStatus", "");
+  }
+});
 
 $("lookupBtn").onclick = lookup;
 
