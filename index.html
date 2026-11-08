@@ -372,12 +372,11 @@ button:disabled {
 .tag.tag-refrigerated .tag-barcode svg { height:calc(100% - 8px); }
 .tag-barcode .barcode-digits { align-self:flex-start; padding-left:8px; }
 
-/* Barcode patch: render JsBarcode at its native SVG dimensions.
-   CSS must not shrink it to fit the narrow footer height. */
+/* Correct barcode: keep the complete SVG in view, with uniform bar widths. */
 .tag-barcode { align-items:flex-start; justify-content:flex-end; overflow:hidden; }
-.tag-barcode svg { width:auto !important; height:auto !important; max-width:none !important; flex:0 0 auto; }
+.tag-barcode svg { display:block; width:auto !important; height:17px !important; max-width:100% !important; flex:0 0 auto; }
+.tag.tag-refrigerated .tag-barcode svg { height:12px !important; }
 .tag-barcode .barcode-digits { padding-left:6px; }
-.tag.tag-refrigerated .tag-barcode svg { width:auto !important; height:auto !important; }
 
 /* NEW: handwritten-price produce and mobile market tags. Original shelf tag unchanged. */
 .market-tag { width:3.4in; height:2.2in; border:1px solid #385b51; border-radius:0; overflow:hidden; background:white; color:#142d26; flex-shrink:0; font-family:Arial,sans-serif; }
@@ -522,7 +521,7 @@ button:disabled {
          inputmode="numeric"
          placeholder="Scan or enter barcode">
 
-  <label for="quickNameSearch">Or search by product name (Co-op database only)</label>
+  <label for="quickNameSearch">Or search by brand or product name (Co-op database only)</label>
   <input id="quickNameSearch" type="search" placeholder="Example: alkaline water, cheese, apples" autocomplete="off">
   <button class="secondary" id="quickNameSearchBtn">Search Co-op Products</button>
   <div id="quickNameResults" aria-live="polite"></div>
@@ -899,9 +898,11 @@ function makeTag(data, tagType = "regular") {
     const options = {
       format,
       displayValue: false,
-      margin: 8,       // Keep quiet zones inside SVG at both ends
-      width: tagType === "refrigerated" ? 1.35 : 2.0, // Native bar module width; no SVG stretching
-      height: tagType === "refrigerated" ? 22 : 32,
+      margin: 0,
+      marginLeft: 8,
+      marginRight: 8,
+      width: tagType === "refrigerated" ? 1.10 : 1.70,
+      height: tagType === "refrigerated" ? 12 : 17,
       lineColor: "#000",
       background: "#fff"
     };
@@ -915,6 +916,14 @@ function makeTag(data, tagType = "regular") {
       } catch (fallbackError) {
         console.warn("Barcode generation failed:", fallbackError);
       }
+    }
+    // Explicit viewBox prevents the browser from clipping or spacing apart
+    // the barcode groups when CSS sets the printed dimensions.
+    const nativeW = parseFloat(barcode.getAttribute("width"));
+    const nativeH = parseFloat(barcode.getAttribute("height"));
+    if (nativeW > 0 && nativeH > 0) {
+      barcode.setAttribute("viewBox", `0 0 ${nativeW} ${nativeH}`);
+      barcode.setAttribute("preserveAspectRatio", "xMinYMid meet");
     }
   }
 
@@ -1202,13 +1211,19 @@ async function quickSearchByName() {
   if (!term) { message("quickNameStatus", "Type a product name to search."); return; }
   message("quickNameStatus", "Searching Co-op products...");
   try {
-    const {data, error} = await db.from("products")
-      .select("*")
-      .ilike("product_name", "%" + term + "%")
-      .order("product_name")
-      .limit(50);
-    if (error) throw error;
-    for (const item of data || []) {
+    const queries = await Promise.all(["product_name", "brand"].map(field =>
+      db.from("products").select("*")
+        .ilike(field, "%" + term + "%")
+        .order("product_name").limit(50)
+    ));
+    const matches = new Map();
+    for (const query of queries) {
+      if (query.error) throw query.error;
+      for (const item of query.data || []) matches.set(item.id, item);
+    }
+    const data = [...matches.values()].sort((a,b) =>
+      String(a.product_name || "").localeCompare(String(b.product_name || "")));
+    for (const item of data) {
       const row = document.createElement("div");
       row.className = "item";
       const label = document.createElement("div");
