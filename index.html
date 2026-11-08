@@ -378,6 +378,12 @@ button:disabled {
 .tag.tag-refrigerated .tag-barcode svg { height:12px !important; }
 .tag-barcode .barcode-digits { padding-left:6px; }
 
+
+/* Center UPC digits beneath the rendered bars, not the entire tag. */
+.barcode-symbol { display:flex; flex-direction:column; align-items:center; justify-content:flex-end; width:max-content; max-width:100%; }
+.barcode-symbol svg { display:block; max-width:100% !important; }
+.tag-barcode .barcode-symbol .barcode-digits { align-self:stretch; width:100%; box-sizing:border-box; padding-left:0; text-align:center; }
+
 /* NEW: handwritten-price produce and mobile market tags. Original shelf tag unchanged. */
 .market-tag { width:3.4in; height:2.2in; border:1px solid #385b51; border-radius:0; overflow:hidden; background:white; color:#142d26; flex-shrink:0; font-family:Arial,sans-serif; }
 .market-tag-top { height:1.12in; background:#a9b99b; display:flex; align-items:center; justify-content:space-between; gap:4px; padding:3px 6px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
@@ -851,11 +857,14 @@ function makeTag(data, tagType = "regular") {
   );
 
   barcode.setAttribute("preserveAspectRatio", "xMinYMid meet");
-  barcodeBox.appendChild(barcode);
+  const barcodeSymbol = document.createElement("div");
+  barcodeSymbol.className = "barcode-symbol";
+  barcodeSymbol.appendChild(barcode);
   const digits = document.createElement("div");
   digits.className = "barcode-digits";
   digits.textContent = String(data.upc || "").trim();
-  barcodeBox.appendChild(digits);
+  barcodeSymbol.appendChild(digits);
+  barcodeBox.appendChild(barcodeSymbol);
 
   const flags = document.createElement("div");
   flags.className = "tag-flags";
