@@ -2460,6 +2460,75 @@ renderMarketQueue();
 startWithAuthentication();
 
 </script>
+<!-- CO-OP FRIDGE TAG FIX: paste this entire block immediately BEFORE </body> in index.html -->
+<style id="coop-fridge-tag-fix">
+/* 2 x 1.10 inch refrigerator labels, keeping the original barcode encoding. */
+.tag.tag-refrigerated { width:2in; height:1.10in; }
+.tag.tag-refrigerated .tag-header {
+  height:.245in; padding:2px 5px; font-size:13px; line-height:1.15;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.tag.tag-refrigerated .tag-name {
+  padding:3px 21px 0 5px; font-size:10px; line-height:1.1;
+  max-height:.26in; overflow:hidden; white-space:normal;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+}
+.tag.tag-refrigerated .tag-corner-icon { top:.27in; right:4px; width:14px; height:14px; }
+.tag.tag-refrigerated .tag-dollar { top:.54in; left:5px; font-size:14px; }
+.tag.tag-refrigerated .tag-footer {
+  left:3px; right:3px; bottom:3px; height:.37in;
+  display:flex; align-items:flex-end; justify-content:space-between; gap:2px;
+}
+.tag.tag-refrigerated .tag-barcode {
+  flex:0 0 1.48in; width:1.48in; height:.35in;
+  padding:0 2px; overflow:hidden; align-items:flex-start;
+}
+.tag.tag-refrigerated .tag-barcode svg { height:17px !important; width:auto !important; max-width:100% !important; }
+.tag.tag-refrigerated .tag-barcode .barcode-digits { font-size:7px; height:8px; line-height:8px; }
+.tag.tag-refrigerated .tag-flags {
+  flex:0 0 .42in; width:.42in; min-width:0; margin:0;
+  transform:none; align-items:center; justify-content:flex-end;
+  gap:1px; padding:0 0 1px; overflow:hidden;
+}
+.tag.tag-refrigerated .tag-snap { max-width:.40in; max-height:.17in; }
+.tag.tag-refrigerated .tag-nongmo,
+.tag.tag-refrigerated .tag-organic {
+  font-size:7px; line-height:1.05; font-weight:900; white-space:nowrap;
+}
+@media print {
+  .print-page.print-page-refrigerated {
+    grid-template-columns:repeat(3,2in);
+    grid-template-rows:repeat(8,1.10in);
+    column-gap:.12in; row-gap:.07in;
+  }
+  .tag.tag-refrigerated .tag-header,
+  .tag.tag-refrigerated .tag-nongmo,
+  .tag.tag-refrigerated .tag-organic,
+  .tag.tag-refrigerated .tag-snap {
+    print-color-adjust:exact; -webkit-print-color-adjust:exact;
+  }
+}
+</style>
+<script id="coop-fridge-tag-fix-js">
+/* Remove accidental duplicate barcode-type dropdown from Produce/Mobile section. */
+(function () {
+  const panel = document.getElementById('marketTagsPanel');
+  if (panel) {
+    const duplicate = panel.querySelector('#shelfTagType');
+    if (duplicate) {
+      const precedingLabel = duplicate.previousElementSibling;
+      const followingNote = duplicate.nextElementSibling;
+      if (precedingLabel && precedingLabel.tagName === 'LABEL' && precedingLabel.htmlFor === 'shelfTagType') precedingLabel.remove();
+      if (followingNote && followingNote.classList.contains('note') && followingNote.textContent.includes('Each tag type')) followingNote.remove();
+      duplicate.remove();
+    }
+  }
+  const option = document.querySelector('#shelfTagType option[value="refrigerated"]');
+  if (option) option.textContent = 'Refrigerated — 2 × 1.10 inches (blue thermometer)';
+
+})();
+</script>
+
 
 </body>
 </html>
