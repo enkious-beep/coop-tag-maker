@@ -419,7 +419,12 @@ button:disabled {
 /* 2 x 1.10 inch refrigerator labels, keeping the original barcode encoding. */
 .tag.tag-refrigerated { width:2in; height:1.10in; }
 .tag.tag-refrigerated .tag-header {
-  height:.245in; padding:2px 5px; font-size:13px; line-height:1.15;
+  height:.245in;
+  display:flex;
+  align-items:flex-end; /* Brand sits at bottom INSIDE green bar */
+  padding:0 5px 2px;
+  font-size:14px; /* Slightly larger brand lettering */
+  line-height:1;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 .tag.tag-refrigerated .tag-name {
